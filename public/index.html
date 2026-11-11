@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tender Radar</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1b1f24; --muted: #667085; --line: #e4e7ec;
+    --accent: #2563eb; --accent-soft: #e8efff; --ok: #12805c; --warn: #b54708; --bad: #c01048;
+    --new: #7a2ff0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216; --panel: #171b21; --text: #e6e9ee; --muted: #98a2b3; --line: #2a3039;
+      --accent: #6b9bff; --accent-soft: #1d2a45; --ok: #3ccb8f; --warn: #f5a524; --bad: #ff6b8a; --new: #b18cff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 1200px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0 12px 0 0; letter-spacing: -.01em; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .spacer { flex: 1; }
+  button, select, input { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .6; cursor: default; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+  .tabs button { border: 0; border-radius: 0; border-right: 1px solid var(--line); }
+  .tabs button:last-child { border-right: 0; }
+  .tabs button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  #q { flex: 1 1 260px; min-width: 0; }
+  .count { color: var(--muted); margin: 4px 0 10px; font-size: 13px; }
+  .list { display: grid; gap: 8px; }
+  .item { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; }
+  .item a.title { color: var(--text); text-decoration: none; font-weight: 600; }
+  .item a.title:hover { color: var(--accent); text-decoration: underline; }
+  .sub { color: var(--muted); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .bank { color: var(--accent); font-weight: 600; }
+  .badge { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; }
+  .badge.new { color: var(--new); }
+  .score { grid-row: 1 / span 2; grid-column: 2; align-self: center; width: 84px; text-align: right; font-size: 12px; color: var(--muted); }
+  .meter { height: 6px; border-radius: 3px; background: var(--line); margin-top: 4px; overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--accent); }
+  details.sites { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 14px; }
+  details.sites summary { cursor: pointer; padding: 10px 14px; font-weight: 600; }
+  .sitegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; padding: 0 14px 14px; }
+  .site { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  .site b { display: block; }
+  .site .st.ok { color: var(--ok); } .site .st.blocked { color: var(--warn); } .site .st.err { color: var(--bad); }
+  .site a { color: var(--accent); }
+  .site .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+  .site .remove { padding: 2px 8px; font-size: 12px; color: var(--bad); }
+  .addsite { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 0 14px 12px; }
+  .addsite input { flex: 1 1 200px; min-width: 0; }
+  .addsite #newName { flex-basis: 160px; }
+  .addsite .meta.err { color: var(--bad); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  @media (max-width: 600px) {
+    .item { grid-template-columns: 1fr; }
+    .score { grid-row: auto; grid-column: 1; width: auto; text-align: left; }
+    .meter { width: 120px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Tender Radar</h1>
+    <span class="meta" id="runinfo">loading…</span>
+    <span class="spacer"></span>
+    <button class="primary" id="scrape">Scrape now</button>
+  </div>
+</header>
+<main>
+  <details class="sites" id="sitesBox">
+    <summary id="sitesSummary">Sources</summary>
+    <form class="addsite" id="addSite">
+      <input id="newName" placeholder="Name (optional), e.g. Eastern Bank" maxlength="100" aria-label="Site name">
+      <input id="newUrl" type="url" required placeholder="Tender page link, https://…" aria-label="Tender page link">
+      <button class="primary" type="submit">Add site</button>
+      <span class="meta" id="addMsg" role="status"></span>
+    </form>
+    <div class="sitegrid" id="sites"></div>
+  </details>
+
+  <div class="filters">
+    <div class="tabs" id="tabs" role="group" aria-label="Category">
+      <button data-cat="software" aria-pressed="true">Software</button>
+      <button data-cat="it" aria-pressed="false">IT / hardware</button>
+      <button data-cat="other" aria-pressed="false">Other</button>
+      <button data-cat="all" aria-pressed="false">All</button>
+    </div>
+    <select id="site" aria-label="Bank"><option value="">All banks</option></select>
+    <select id="days" aria-label="Period">
+      <option value="30">Last 30 days</option>
+      <option value="90" selected>Last 90 days</option>
+      <option value="365">Last year</option>
+      <option value="0">Any time</option>
+    </select>
+    <input id="q" type="search" placeholder="Search by meaning, e.g. “mobile app” or “core banking”">
+  </div>
+  <div class="count" id="count"></div>
+  <div class="list" id="list"></div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const state = { category: 'software', site: '', days: '90', q: '' };
+try { Object.assign(state, JSON.parse(localStorage.getItem('tr-filters') || '{}')); } catch {}
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = (d) => d ? new Date(d.length === 10 ? d + 'T00:00:00' : d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+const ago = (iso) => {
+  if (!iso) return 'never';
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
+};
+
+function syncControls() {
+  document.querySelectorAll('#tabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cat === state.category)));
+  $('#site').value = state.site; $('#days').value = state.days; $('#q').value = state.q;
+}
+
+let reqId = 0;
+async function loadTenders() {
+  try { localStorage.setItem('tr-filters', JSON.stringify(state)); } catch {}
+  const id = ++reqId;
+  const p = new URLSearchParams({ category: state.category, days: state.days });
+  if (state.site) p.set('site', state.site);
+  if (state.q) p.set('q', state.q);
+  $('#count').textContent = 'Loading…';
+  const rows = await fetch('/api/tenders?' + p).then((r) => r.json());
+  if (id !== reqId) return;
+  $('#count').textContent = `${rows.length}${rows.length === 500 ? '+' : ''} tender${rows.length === 1 ? '' : 's'} · ${state.q ? 'ranked by meaning' : 'most software-relevant first'}`;
+  const dayAgo = Date.now() - 3 * 86400000;
+  $('#list').innerHTML = rows.length ? rows.map((r) => `
+    <article class="item">
+      <div>${r.url ? `<a class="title" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.title)}</a>` : `<span class="title">${esc(r.title)}</span>`}</div>
+      <div class="score" title="Software relevance from the embedding model">${Math.round((r.score ?? 0) * 100)}% software<div class="meter"><i style="width:${Math.round((r.score ?? 0) * 100)}%"></i></div></div>
+      <div class="sub">
+        <span class="bank">${esc(r.site)}</span>
+        ${r.published ? `<span>Dated ${fmtDate(r.published)}</span>` : ''}
+        <span>First seen ${fmtDate(r.first_seen)}</span>
+        ${new Date(r.first_seen) > dayAgo ? '<span class="badge new">NEW</span>' : ''}
+      </div>
+    </article>`).join('') : '<div class="empty">No tenders match these filters.</div>';
+}
+
+async function loadSites() {
+  const { running, sites } = await fetch('/api/sites').then((r) => r.json());
+  const last = sites.map((s) => s.last_run).filter(Boolean).sort().pop();
+  $('#runinfo').textContent = running ? 'Scraping now…' : `Last scrape ${ago(last)}`;
+  $('#scrape').disabled = running;
+  const ok = sites.filter((s) => s.ok).length;
+  $('#sitesSummary').textContent = `Sources · ${ok} of ${sites.length} working`;
+  $('#sites').innerHTML = sites.map((s) => {
+    const st = s.ok ? ['ok', `OK · ${s.found} on page${s.new_items ? `, ${s.new_items} new` : ''}`]
+      : s.blocked ? ['blocked', 'Blocked by captcha · check manually']
+      : s.last_run ? ['err', `Error: ${esc(s.error)}`] : ['', 'Not run yet'];
+    return `<div class="site"><b>${esc(s.name)}</b>
+      <span class="st ${st[0]}">${st[1]}</span><br>
+      <span class="meta">${s.software} software of ${s.total} stored · ${ago(s.last_run)}</span>
+      <div class="actions"><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">Open page ↗</a>
+      <button class="remove" data-id="${esc(s.id)}" data-name="${esc(s.name)}" type="button">Remove</button></div></div>`;
+  }).join('');
+  const sel = $('#site');
+  const ids = sites.map((s) => s.id).join();
+  if (sel.dataset.ids !== ids) {
+    sel.dataset.ids = ids;
+    sel.length = 1;
+    for (const s of sites) sel.add(new Option(s.name, s.id));
+    if (!sites.some((s) => s.id === state.site)) state.site = '';
+    sel.value = state.site;
+  }
+  return running;
+}
+
+const postJson = (url, method, body = {}) =>
+  fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+$('#addSite').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('#addMsg');
+  msg.className = 'meta'; msg.textContent = 'Adding…';
+  const r = await postJson('/api/sites', 'POST', { name: $('#newName').value, url: $('#newUrl').value });
+  const data = await r.json();
+  if (!r.ok) { msg.className = 'meta err'; msg.textContent = data.error; return; }
+  msg.textContent = `Added ${data.name}. Scraping it now…`;
+  $('#newName').value = ''; $('#newUrl').value = '';
+  watchRun();
+});
+
+$('#sites').addEventListener('click', async (e) => {
+  const b = e.target.closest('button.remove'); if (!b) return;
+  if (!confirm(`Remove ${b.dataset.name}?\n\nIts scraped tenders will be deleted from the database too.`)) return;
+  b.disabled = true;
+  const r = await postJson(`/api/sites/${encodeURIComponent(b.dataset.id)}`, 'DELETE');
+  if (!r.ok) { b.disabled = false; alert((await r.json()).error); return; }
+  await loadSites(); loadTenders();
+});
+
+$('#tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.category = b.dataset.cat; syncControls(); loadTenders();
+});
+$('#site').addEventListener('change', (e) => { state.site = e.target.value; loadTenders(); });
+$('#days').addEventListener('change', (e) => { state.days = e.target.value; loadTenders(); });
+let t; $('#q').addEventListener('input', (e) => { clearTimeout(t); t = setTimeout(() => { state.q = e.target.value.trim(); loadTenders(); }, 350); });
+
+let poll;
+$('#scrape').addEventListener('click', async () => {
+  await postJson('/api/scrape', 'POST');
+  watchRun();
+});
+async function watchRun() {
+  clearInterval(poll);
+  poll = setInterval(async () => {
+    if (!(await loadSites())) { clearInterval(poll); loadTenders(); }
+  }, 3000);
+  loadSites();
+}
+
+syncControls();
+loadSites().then((running) => { if (running) watchRun(); });
+loadTenders();
+setInterval(() => { loadSites(); }, 60000);
+</script>
+</body>
+</html>
