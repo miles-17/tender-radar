@@ -31,10 +31,22 @@ async function listTenders(params) {
   if (cat !== 'all') { where.push('category = ?'); args.push(cat); }
   const site = params.get('site');
   if (site) { where.push('site_id = ?'); args.push(site); }
+  // Date filters use the date on the bank's page, else the day we first saw it.
+  const DAY = "COALESCE(published, substr(first_seen, 1, 10))";
   const sinceDays = Number(params.get('days') || 0);
   if (sinceDays > 0) {
-    where.push("COALESCE(published, substr(first_seen, 1, 10)) >= date('now', ?)");
+    where.push(`${DAY} >= date('now', ?)`);
     args.push(`-${sinceDays} days`);
+  }
+  // Custom range: from/to are inclusive YYYY-MM-DD; either may be left open.
+  // Matches the page date only: undated tenders all share the day of the first
+  // scrape, so a first_seen fallback would flood any range covering that day.
+  for (const [key, op] of [['from', '>='], ['to', '<=']]) {
+    const d = params.get(key);
+    if (!d) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw Object.assign(new Error(`${key} must be YYYY-MM-DD`), { status: 400 });
+    where.push(`published ${op} ?`);
+    args.push(d);
   }
   const q = (params.get('q') || '').trim();
   // Most software-relevant first; newest first among equal scores.

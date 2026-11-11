@@ -47,7 +47,7 @@ async function rupali(site) {
   const endpoint = new URL('employee-grid-data1.php', site.url).href;
   const body = new URLSearchParams({
     type: '18', news_status: '1', ZoneID: '', year: '', title: '',
-    draw: '1', start: '0', length: '100', 'order[0][column]': '2', 'order[0][dir]': 'desc',
+    draw: '1', start: '0', length: '5000', 'order[0][column]': '2', 'order[0][dir]': 'desc', // length: whole archive (~1.4k rows, ~300 KB)
   });
   const json = JSON.parse(await get(endpoint, {
     method: 'POST',

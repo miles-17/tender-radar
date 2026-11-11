@@ -32,7 +32,8 @@ const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
 export function parseDate(text) {
   const m = DATE_RE.exec(text || '');
   if (!m) return null;
-  const mon = (s) => MONTHS.split('|').indexOf(s.slice(0, 3).toLowerCase()) + 1;
+  // Index in a 12-entry list: MONTHS also has 'sept', which would shift oct-dec by one.
+  const mon = (s) => 'janfebmaraprmayjunjulaugsepoctnovdec'.indexOf(s.slice(0, 3).toLowerCase()) / 3 + 1;
   let y, mo, d;
   if (m[1]) [d, mo, y] = [+m[1], mon(m[2]), +m[3]];
   else if (m[4]) [mo, d, y] = [mon(m[4]), +m[5], +m[6]];
@@ -44,6 +45,7 @@ export function parseDate(text) {
 
 // Words that make a link look like a tender/procurement notice.
 const TENDER_RE = /tender|rfp|rfq|rfi|request for|proposal|quotation|eoi|expression of interest|procure|enlist|bid|invitation|supply|purchase|vendor|software|system|solution|re-?tender|corrigendum|addendum|notice/i;
+const DOC_RE = /\.(?:pdf|docx?|xlsx?|zip|rar)(?:[?#]|$)/i;
 // Obvious non-tender noise that shows up in content areas.
 const NOISE_RE = /^(?:(?:read|view|learn|click|see)\s*(?:more|here|details|now)?|download(?:\s*(?:now|here|file|pdf|link))?|preview\s*\w*|details|more|pdf|here|apply now|home|back|next|previous|(?:go|skip) to \w+(?: \w+)?|\d+)$/i;
 
@@ -61,7 +63,9 @@ export function extractItems(html, pageUrl, cfg = {}) {
   const root = cfg.scope ? $(cfg.scope) : $('body');
   const seen = new Map();
 
-  const add = (title, href, context) => {
+  // listRow: a dated table row linking to a document. On a tender page that is
+  // a notice even when its title has no tender word (e.g. "Digital Banking Revamp").
+  const add = (title, href, context, listRow = false) => {
     title = clean(title);
     if (!title || title.length < 8 || NOISE_RE.test(title)) return;
     let url = null;
@@ -69,7 +73,7 @@ export function extractItems(html, pageUrl, cfg = {}) {
       try { url = new URL(href, pageUrl).href; } catch { /* bad href */ }
     }
     const requireKw = cfg.keywords ?? !cfg.item;
-    if (requireKw && !TENDER_RE.test(`${title} ${url || ''}`)) return;
+    if (requireKw && !listRow && !TENDER_RE.test(`${title} ${url || ''}`)) return;
     const key = `${title.toLowerCase()}|${url || ''}`;
     if (seen.has(key)) return;
     seen.set(key, {
@@ -104,7 +108,9 @@ export function extractItems(html, pageUrl, cfg = {}) {
           ? $tr.find('td').map((__, td) => clean($(td).text())).get().sort((x, y) => y.length - x.length)[0]
           : clean($row.text());
       }
-      add(title, $a.attr('href'), $row.text());
+      const $tr = $a.closest('tr');
+      const listRow = $tr.length > 0 && DOC_RE.test($a.attr('href')) && !!parseDate($tr.text());
+      add(title, $a.attr('href'), $row.text(), listRow);
     });
   }
   return [...seen.values()];
