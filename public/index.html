@@ -4,18 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tender Radar</title>
+<script>
+  // Apply the saved theme before first paint, so the page never flashes the wrong one.
+  try { const t = localStorage.getItem('tr-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
 <style>
   :root {
     --bg: #f6f7f9; --panel: #fff; --text: #1b1f24; --muted: #667085; --line: #e4e7ec;
     --accent: #2563eb; --accent-soft: #e8efff; --ok: #12805c; --warn: #b54708; --bad: #c01048;
     --new: #7a2ff0;
   }
+  /* Dark: follows the system unless the theme switch picked one (data-theme on <html>). */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #0f1216; --panel: #171b21; --text: #e6e9ee; --muted: #98a2b3; --line: #2a3039;
       --accent: #6b9bff; --accent-soft: #1d2a45; --ok: #3ccb8f; --warn: #f5a524; --bad: #ff6b8a; --new: #b18cff;
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #0f1216; --panel: #171b21; --text: #e6e9ee; --muted: #98a2b3; --line: #2a3039;
+    --accent: #6b9bff; --accent-soft: #1d2a45; --ok: #3ccb8f; --warn: #f5a524; --bad: #ff6b8a; --new: #b18cff;
+  }
+  :root { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+  #theme { min-width: 40px; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -76,6 +89,7 @@
     <h1>Tender Radar</h1>
     <span class="meta" id="runinfo">loading…</span>
     <span class="spacer"></span>
+    <button id="theme" type="button"></button>
     <button class="primary" id="scrape">Scrape now</button>
   </div>
 </header>
@@ -241,6 +255,22 @@ async function watchRun() {
   }, 3000);
   loadSites();
 }
+
+// Theme switch: flips between light and dark; the choice is remembered in this browser.
+const isDark = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+function showTheme() {
+  const dark = isDark();
+  $('#theme').textContent = dark ? '☀' : '☾';
+  $('#theme').title = $('#theme').ariaLabel = dark ? 'Switch to light theme' : 'Switch to dark theme';
+}
+$('#theme').addEventListener('click', () => {
+  const t = isDark() ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('tr-theme', t); } catch {}
+  showTheme();
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', showTheme);
+showTheme();
 
 syncControls(); syncBounds();
 loadSites().then((running) => { if (running) watchRun(); });
