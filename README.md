@@ -1,6 +1,6 @@
 # Tender Radar
 
-Scrapes tender / RFP / RFQ notices from 16 Bangladeshi bank websites, scores each one for
+Scrapes tender / RFP / RFQ notices from 36 Bangladeshi bank websites, scores each one for
 software-development relevance with a local embedding model, stores them in SQLite, and shows
 them on a dashboard.
 
@@ -21,8 +21,16 @@ Dashboard: http://127.0.0.1:8642
 Each tender is labelled `software`, `it` (hardware / networking) or `other`, with a 0–100 %
 software score. The search box ranks results by meaning using the same model.
 
-Sites behind a captcha (Southeast Bank, Shahjalal Islami Bank, IFIC Bank at the time of writing)
-are reported as "Blocked" on the dashboard and are not bypassed. Check those manually.
+Sites behind a captcha or bot check (Southeast Bank, Shahjalal Islami Bank, IFIC Bank, and at times
+Bengal Commercial Bank, at the time of writing) are reported as "Blocked" on the dashboard and are
+not bypassed. Check those manually.
+
+Not covered: Bangladesh Commerce Bank (its tender list is behind a firewall that rejects scripts),
+Dhaka Bank, Mutual Trust Bank and Standard Chartered (no tender page on their sites).
+
+Some banks (NCC, National Bank) serve an incomplete SSL certificate chain. Like a browser, the
+scraper downloads the missing intermediate certificate named in the site's certificate and still
+verifies the full chain (`data/ca-bundle.pem`).
 
 ## Running
 
