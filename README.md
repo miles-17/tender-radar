@@ -40,6 +40,20 @@ Some banks (NCC, National Bank) serve an incomplete SSL certificate chain. Like 
 scraper downloads the missing intermediate certificate named in the site's certificate and still
 verifies the full chain (`data/ca-bundle.pem`).
 
+## Ministries & Departments
+
+The dashboard's **Ministries & Departments** section holds government tenders from two
+national sources, each tagged with its ministry, division and organisation:
+
+| Source | What | How |
+|---|---|---|
+| e-GP (eprocure.gov.bd) | All ministries' live e-tenders | Public "Advanced Search" list, tenders published since yesterday, 100 per page |
+| BPPA (bppa.gov.bd) | Newspaper advertisements: goods, works, services, physical services | Each ministry's filtered list, newest page (~200 requests, about 6 minutes) |
+
+The ministry dropdown is built from the tenders held, so a ministry appears once it has
+published something since the start date. Embassies, international organisations and
+associations are not covered: they don't publish through e-GP or BPPA.
+
 ## Running
 
 It runs as a systemd user service, scraping every 3 hours. It starts at boot and restarts if it crashes.
