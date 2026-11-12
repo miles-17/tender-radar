@@ -44,7 +44,17 @@ db.exec(`
     scope       TEXT,
     added       TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+  -- Notices that were already on a bank's page before the start date: never stored.
+  CREATE TABLE IF NOT EXISTS ignored (id TEXT PRIMARY KEY, site_id TEXT NOT NULL);
 `);
+// baselined = 1 once a site's first successful scrape has recorded what was already there.
+if (!db.prepare("SELECT 1 FROM pragma_table_info('sites') WHERE name = 'baselined'").get()) {
+  db.exec('ALTER TABLE sites ADD COLUMN baselined INTEGER NOT NULL DEFAULT 0');
+}
+// Only tenders from this date on are kept (set on first run, Asia/Dhaka-local date).
+db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('since', date('now', 'localtime'))").run();
+export const SINCE = db.prepare("SELECT value FROM settings WHERE key = 'since'").get().value;
 
 // First start: seed the editable site list from the built-in bank list.
 if (!db.prepare('SELECT COUNT(*) n FROM sites').get().n) {
@@ -71,6 +81,7 @@ export function removeSite(id) {
   try {
     db.prepare('DELETE FROM tenders WHERE site_id = ?').run(id);
     db.prepare('DELETE FROM site_status WHERE site_id = ?').run(id);
+    db.prepare('DELETE FROM ignored WHERE site_id = ?').run(id);
     const { changes } = db.prepare('DELETE FROM sites WHERE id = ?').run(id);
     db.exec('COMMIT');
     return changes > 0;
@@ -89,18 +100,28 @@ const insert = db.prepare(`
   ON CONFLICT(id) DO UPDATE SET last_seen = excluded.last_seen,
     published = COALESCE(tenders.published, excluded.published)`);
 const exists = db.prepare('SELECT 1 FROM tenders WHERE id = ?');
+const isIgnored = db.prepare('SELECT 1 FROM ignored WHERE id = ?');
+const ignore = db.prepare('INSERT OR IGNORE INTO ignored (id, site_id) VALUES (?, ?)');
 
-/** Upsert scraped items; returns ids of items not seen before. */
-export function saveItems(siteId, items) {
+/**
+ * Upsert scraped items; returns ids of items not seen before.
+ * Old notices are recorded in `ignored` instead: dated before SINCE, or undated
+ * and already on the page at the site's first (baseline) scrape.
+ */
+export function saveItems(siteId, items, baseline = false) {
   const now = new Date().toISOString();
   const fresh = [];
   db.exec('BEGIN');
   try {
     for (const it of items) {
       const id = tenderId(siteId, it);
-      if (!exists.get(id)) fresh.push(id);
+      if (isIgnored.get(id)) continue;
+      const known = exists.get(id);
+      if (!known && (it.published ? it.published < SINCE : baseline)) { ignore.run(id, siteId); continue; }
+      if (!known) fresh.push(id);
       insert.run(id, siteId, it.title, it.url, it.published, it.context, now, now);
     }
+    if (baseline && items.length) db.prepare('UPDATE sites SET baselined = 1 WHERE id = ?').run(siteId);
     db.exec('COMMIT');
   } catch (e) {
     db.exec('ROLLBACK');

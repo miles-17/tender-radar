@@ -13,8 +13,10 @@ async function scrape(sites, log) {
     if (!getSite(site.id)) continue; // removed while queued
     try {
       const items = await scrapeSite(site);
-      if (!getSite(site.id)) continue; // removed mid-scrape: don't resurrect its rows
-      const fresh = saveItems(site.id, items);
+      const current = getSite(site.id);
+      if (!current) continue; // removed mid-scrape: don't resurrect its rows
+      // First successful scrape of a site: what's already listed is old.
+      const fresh = saveItems(site.id, items, !current.baselined);
       total += fresh.length;
       setStatus(site.id, { ok: true, found: items.length, newItems: fresh.length });
       log(`[${site.id}] ${items.length} found, ${fresh.length} new`);
