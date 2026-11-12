@@ -8,7 +8,7 @@ import { X509Certificate } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractItems, extractJsonItems } from './extract.js';
+import { extractItems, extractJsonItems, extractEgpRows, egpTotalPages, extractBppaRows, bppaMinistries } from './extract.js';
 
 const run = promisify(execFile);
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
@@ -111,9 +111,55 @@ async function rupali(site) {
     .map((it) => ({ ...it, title: it.title.replace(/&amp;/g, '&') }));
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const dmy = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
+// e-GP (eprocure.gov.bd): every ministry's live tenders, via the public
+// "Advanced Search" list. Fetches what was published since yesterday, 100 a page.
+async function egp(site) {
+  const since = new Date(Date.now() - 86400_000);
+  const items = [];
+  for (let page = 1, pages = 1; page <= pages && page <= 30; page++) {
+    const body = new URLSearchParams({
+      funName: 'AllTenders', viewType: 'Live', departmentId: '', office: '', procNature: '', procType: '',
+      procMethod: '', tenderId: '', refNo: '', pubDtFrm: dmy(since), pubDtTo: '', closeDtFrm: '', closeDtTo: '',
+      cpvCategory: '', isFrame: '', budgetType: '', pageNo: String(page), size: '100', h: 't',
+    });
+    const html = await get(new URL('/TenderDetailsServlet', site.url).href, {
+      method: 'POST', body, headers: { 'x-requested-with': 'XMLHttpRequest', referer: site.url, 'content-type': 'application/x-www-form-urlencoded' },
+    });
+    items.push(...extractEgpRows(html));
+    pages = egpTotalPages(html);
+    await sleep(500);
+  }
+  return items;
+}
+
+// BPPA (bppa.gov.bd) newspaper advertisements. Rows don't name the ministry, so
+// read each ministry's filtered list: newest page of goods, works, services and
+// physical services. ~200 small requests, spaced out.
+const BPPA_TYPES = ['goods', 'works', 'services', 'physical-service'];
+async function bppa(site) {
+  const listUrl = (type, ministry = '') =>
+    `https://www.bppa.gov.bd/advertisement-notices/advertisement-${type}.html?ministryId.id=${ministry}&agencyId.id=&page=0`;
+  const ministries = bppaMinistries(await get(listUrl('goods')));
+  if (!ministries.length) throw new Error('BPPA ministry list not found');
+  const items = [];
+  for (const m of ministries) {
+    for (const type of BPPA_TYPES) {
+      const url = listUrl(type, m.id);
+      items.push(...extractBppaRows(await get(url), url, m.name));
+      await sleep(300);
+    }
+  }
+  return items;
+}
+
 /** Fetch one site and return its candidate tender items. */
 export async function scrapeSite(site) {
   if (site.kind === 'rupali') return rupali(site);
+  if (site.kind === 'egp') return egp(site);
+  if (site.kind === 'bppa') return bppa(site);
   const html = await get(site.url);
   if (site.kind === 'json') return extractJsonItems(html, site.url);
   if (site.kind === 'auto') {

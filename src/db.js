@@ -48,10 +48,13 @@ db.exec(`
   -- Notices that were already on a bank's page before the start date: never stored.
   CREATE TABLE IF NOT EXISTS ignored (id TEXT PRIMARY KEY, site_id TEXT NOT NULL);
 `);
+const hasColumn = (table, col) => !!db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(col);
 // baselined = 1 once a site's first successful scrape has recorded what was already there.
-if (!db.prepare("SELECT 1 FROM pragma_table_info('sites') WHERE name = 'baselined'").get()) {
-  db.exec('ALTER TABLE sites ADD COLUMN baselined INTEGER NOT NULL DEFAULT 0');
-}
+if (!hasColumn('sites', 'baselined')) db.exec('ALTER TABLE sites ADD COLUMN baselined INTEGER NOT NULL DEFAULT 0');
+// section: 'bank' (bank tender pages) or 'gov' (ministries & departments: e-GP, BPPA).
+if (!hasColumn('sites', 'section')) db.exec("ALTER TABLE sites ADD COLUMN section TEXT NOT NULL DEFAULT 'bank'");
+// org: "Ministry, Division, Organisation, ..." for government tenders.
+if (!hasColumn('tenders', 'org')) db.exec('ALTER TABLE tenders ADD COLUMN org TEXT');
 // Only tenders from this date on are kept (set on first run, Asia/Dhaka-local date).
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('since', date('now', 'localtime'))").run();
 export const SINCE = db.prepare("SELECT value FROM settings WHERE key = 'since'").get().value;
@@ -59,9 +62,9 @@ export const SINCE = db.prepare("SELECT value FROM settings WHERE key = 'since'"
 // First start: seed the editable site list from the built-in bank list.
 if (!db.prepare('SELECT COUNT(*) n FROM sites').get().n) {
   const { SITES } = await import('./sites.js');
-  const seed = db.prepare('INSERT INTO sites (id, name, url, kind, scope, added) VALUES (?, ?, ?, ?, ?, ?)');
+  const seed = db.prepare('INSERT INTO sites (id, name, url, kind, scope, section, added) VALUES (?, ?, ?, ?, ?, ?, ?)');
   const now = new Date().toISOString();
-  for (const s of SITES) seed.run(s.id, s.name, s.url, s.kind, s.scope ?? null, now);
+  for (const s of SITES) seed.run(s.id, s.name, s.url, s.kind, s.scope ?? null, s.section ?? 'bank', now);
 }
 
 export const listSites = () => db.prepare('SELECT * FROM sites ORDER BY added, rowid').all();
@@ -95,10 +98,11 @@ export const tenderId = (siteId, it) =>
   createHash('sha1').update(`${siteId}|${it.url || ''}|${it.title.toLowerCase()}`).digest('hex');
 
 const insert = db.prepare(`
-  INSERT INTO tenders (id, site_id, title, url, published, context, first_seen, last_seen)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO tenders (id, site_id, title, url, published, context, org, first_seen, last_seen)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(id) DO UPDATE SET last_seen = excluded.last_seen,
-    published = COALESCE(tenders.published, excluded.published)`);
+    published = COALESCE(tenders.published, excluded.published),
+    org = COALESCE(excluded.org, tenders.org)`);
 const exists = db.prepare('SELECT 1 FROM tenders WHERE id = ?');
 const isIgnored = db.prepare('SELECT 1 FROM ignored WHERE id = ?');
 const ignore = db.prepare('INSERT OR IGNORE INTO ignored (id, site_id) VALUES (?, ?)');
@@ -119,7 +123,7 @@ export function saveItems(siteId, items, baseline = false) {
       const known = exists.get(id);
       if (!known && (it.published ? it.published < SINCE : baseline)) { ignore.run(id, siteId); continue; }
       if (!known) fresh.push(id);
-      insert.run(id, siteId, it.title, it.url, it.published, it.context, now, now);
+      insert.run(id, siteId, it.title, it.url, it.published, it.context, it.org ?? null, now, now);
     }
     if (baseline && items.length) db.prepare('UPDATE sites SET baselined = 1 WHERE id = ?').run(siteId);
     db.exec('COMMIT');

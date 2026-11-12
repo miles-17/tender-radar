@@ -52,7 +52,8 @@ const STRONG_SW_KW = /\b(software|solutions?|platform|web ?site|web portal|apps?
 // Physical goods: lower software relevance.
 const HW_KW = /\b(units?|machines?|modems?|devices?|printers?|scanners?|servers?|laptops?|desktops?|terminals?|equipment'?s?|hardware|spare parts?)\b/i;
 const SOFTWARE_KW = /\b(portal|erp|crm|api|integration|development|digital|automation|saas|cloud|cyber|vapt|siem|database|analytics|chatbot|ai|ml|module)\b/i;
-const NON_SW_KW = /\b(printing|calendar|diary|furniture|renovation|interior|civil|generator|vehicle|car|tires?|stationery|paper|auction|agm|toilet|cable|sticker|vrf|chiller|air ?condition\w*|ac|branch|premises|signboard|stamp|water|fire|lift|elevator)\b/i;
+// Last group: government works and goods (e-GP / BPPA).
+const NON_SW_KW = /\b(printing|calendar|diary|furniture|renovation|interior|civil|generator|vehicle|car|tires?|stationery|paper|auction|agm|toilet|cable|sticker|vrf|chiller|air ?condition\w*|ac|branch|premises|signboard|stamp|water|fire|lift|elevator|construction|repair\w*|re-?excavation|excavation|containers?|garbage|waste|roads?|bridges?|culverts?|drains?|drainage|pavement|embankment|dredging|boundary|walls?|buildings?|pond|canal|tubewell|medicines?|drugs?|seeds?|fertili[sz]ers?|uniforms?|rice|wheat|fuel|lubricants?)\b/i;
 
 // Tender boilerplate carries no topic; strip it so the subject drives the embedding.
 const BOILERPLATE = [
@@ -115,9 +116,11 @@ export async function classify(items) {
     batch.forEach((it, j) => {
       const v = vecs[j];
       const sim = Object.fromEntries(Object.entries(protos).map(([k, ps]) => [k, Math.max(...ps.map((p) => dot(p, v)))]));
-      if (STRONG_SW_KW.test(it.title) && !NON_SW_KW.test(it.title)) sim.software += 0.06;
+      // Saying "software" outright beats incidental words ("Software for Water Supply Billing").
+      const nonSw = NON_SW_KW.test(it.title) && !/\bsoftware\b/i.test(it.title);
+      if (STRONG_SW_KW.test(it.title) && !nonSw) sim.software += 0.06;
       else if (SOFTWARE_KW.test(it.title)) sim.software += 0.03;
-      if (NON_SW_KW.test(it.title)) sim.software -= 0.05;
+      if (nonSw) sim.software -= 0.05;
       if (HW_KW.test(it.title) && !/\bsoftware\b/i.test(it.title)) sim.software -= 0.04;
       let category = Object.keys(sim).reduce((a, b) => (sim[a] >= sim[b] ? a : b));
       // Nothing left after stripping boilerplate ("Invitation for Tender"): no topic to judge.

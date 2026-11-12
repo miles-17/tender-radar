@@ -27,6 +27,12 @@ const toVec = (buf) => new Float32Array(buf.buffer, buf.byteOffset, buf.byteLeng
 async function listTenders(params) {
   const where = [];
   const args = [];
+  // Section: bank tender pages or ministries & departments (government sources).
+  where.push('site_id IN (SELECT id FROM sites WHERE section = ?)');
+  args.push(params.get('section') === 'gov' ? 'gov' : 'bank');
+  // Ministry, or "Ministry › Division": matches that org and everything under it.
+  const org = params.get('org');
+  if (org) { where.push("(org = ? OR substr(org, 1, length(?) + 3) = ? || ' › ')"); args.push(org, org, org); }
   const cat = params.get('category') || 'software';
   if (cat !== 'all') { where.push('category = ?'); args.push(cat); }
   const site = params.get('site');
@@ -50,7 +56,7 @@ async function listTenders(params) {
   }
   const q = (params.get('q') || '').trim();
   // Most software-relevant first; newest first among equal scores.
-  const sql = `SELECT id, site_id, title, url, published, first_seen, category, score${q ? ', embedding' : ''}
+  const sql = `SELECT id, site_id, title, url, published, first_seen, category, score, org${q ? ', embedding' : ''}
     FROM tenders ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY score DESC, COALESCE(published, substr(first_seen, 1, 10)) DESC, first_seen DESC`;
   let rows = db.prepare(sql).all(...args);
@@ -66,6 +72,18 @@ async function listTenders(params) {
   }
   const names = Object.fromEntries(listSites().map((s) => [s.id, s.name]));
   return rows.slice(0, 500).map(({ embedding, ...r }) => ({ ...r, site: names[r.site_id] || r.site_id }));
+}
+
+/** Ministries and their divisions, from the government tenders we hold. */
+function orgs() {
+  const tree = new Map();
+  for (const { org } of db.prepare("SELECT DISTINCT org FROM tenders WHERE org IS NOT NULL AND site_id IN (SELECT id FROM sites WHERE section = 'gov')").all()) {
+    const [ministry, second] = org.split(' › ');
+    if (!tree.has(ministry)) tree.set(ministry, new Set());
+    // A ministry's division ("Internal Resource Division"), not an office named "... PWD Division".
+    if (second && /^[\w&'() -]{3,60} Division$/.test(second) && !/engineer|executive|director|office|circle|zone/i.test(second)) tree.get(ministry).add(second);
+  }
+  return [...tree].sort(([a], [b]) => a.localeCompare(b)).map(([ministry, divs]) => ({ ministry, divisions: [...divs].sort() }));
 }
 
 function sites() {
@@ -109,6 +127,7 @@ createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/') return send(res, 200, readFileSync(INDEX), 'text/html');
     if (req.method === 'GET' && path === '/api/tenders') return send(res, 200, await listTenders(url.searchParams));
     if (req.method === 'GET' && path === '/api/sites') return send(res, 200, { running: isRunning(), sites: sites() });
+    if (req.method === 'GET' && path === '/api/orgs') return send(res, 200, orgs());
     if (req.method === 'POST' && path === '/api/sites') return await handleAddSite(req, res);
     if (req.method === 'DELETE' && path.startsWith('/api/sites/')) {
       await readJson(req);

@@ -3,6 +3,8 @@
 //   json   - tender rows embedded as JSON in <script> (Next.js sites)
 //   rupali - Rupali Bank's DataTables POST endpoint
 //   auto   - embedded JSON and HTML scan, merged (same as sites added from the dashboard)
+//   egp    - e-GP national portal, all ministries (section 'gov')
+//   bppa   - BPPA newspaper advertisements, per ministry (section 'gov')
 // `scope` (optional) narrows the html scan to a CSS selector.
 export const SITES = [
   { id: 'nrb', name: 'NRB Bank', url: 'https://www.nrbbankbd.com/forms-downloads/', kind: 'html' },
@@ -41,4 +43,7 @@ export const SITES = [
   { id: 'trust', name: 'Trust Bank', url: 'https://www.tblbd.com/tenders/', kind: 'auto' },
   { id: 'union', name: 'Union Bank', url: 'https://unionbank.com.bd/tender-notice-', kind: 'auto' },
   { id: 'uttara', name: 'Uttara Bank', url: 'https://www.uttarabank-bd.com/tender', kind: 'auto' },
+  // Ministries & departments: all government procuring entities, tagged by ministry/division.
+  { id: 'egp', name: 'e-GP (all ministries)', url: 'https://www.eprocure.gov.bd/resources/common/AllTenders.jsp?h=t', kind: 'egp', section: 'gov' },
+  { id: 'bppa', name: 'BPPA advertisements', url: 'https://www.bppa.gov.bd/advertisement-notices.html', kind: 'bppa', section: 'gov' },
 ];

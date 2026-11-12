@@ -175,3 +175,82 @@ export function extractJsonItems(html, pageUrl) {
   }
   return [...seen.values()];
 }
+
+// ---- Government sources ----------------------------------------------------
+
+const cellText = ($, el) => clean($(el).text());
+
+/**
+ * e-GP "All tenders" rows (HTML fragment of <tr>s from TenderDetailsServlet).
+ * Columns: #, "id, ref, status", "nature, title", "ministry, division, org, PE",
+ * "type, method", "published, closing".
+ */
+export function extractEgpRows(html) {
+  const $ = cheerio.load(`<table>${html}</table>`);
+  const items = [];
+  $('tr').each((_, tr) => {
+    const td = $(tr).find('td');
+    if (td.length < 6) return;
+    const id = $(td[2]).find('input[name=id]').attr('value') || cellText($, td[1]).split(',')[0];
+    const title = clean($(td[2]).find('p').text()) || cellText($, td[2]);
+    const nature = cellText($, td[2]).split(',')[0];
+    // Ministry/division/organisation lines are <br/>-separated. Joined with " › ":
+    // names contain commas ("Ministry of Energy, Power and Mineral Resources").
+    const org = $(td[3]).html().split(/<br\s*\/?>/i).map((s) => clean(cheerio.load(s).text()).replace(/,$/, '')).filter(Boolean).join(' › ');
+    const [pub, close] = cellText($, td[5]).split(',');
+    if (!/^\d+$/.test(id) || !title) return;
+    items.push({
+      title: title.slice(0, 500),
+      url: `https://www.eprocure.gov.bd/resources/common/ViewTender.jsp?id=${id}&h=t`,
+      published: parseDate(pub),
+      org,
+      context: `${nature}. ${title}. ${org}. Closing ${clean(close)}`.slice(0, 1000),
+    });
+  });
+  return items;
+}
+
+/** e-GP's paging info, from hidden inputs in the same fragment. */
+export const egpTotalPages = (html) => Number((/id="totalPages"[^>]*value="(\d+)"|totalPages" value="(\d+)"/.exec(html) || []).slice(1).find(Boolean) || 1);
+
+/**
+ * BPPA advertisement list page (one ministry, one procurement type).
+ * Columns: #, title & ref, procuring entity, publication date, closing, place.
+ */
+export function extractBppaRows(html, pageUrl, ministry) {
+  const $ = cheerio.load(html);
+  const items = [];
+  $('table tr').each((_, tr) => {
+    const td = $(tr).find('td');
+    const href = $(tr).find('a[href*="details-"]').attr('href');
+    if (td.length < 5 || !href) return;
+    const title = cellText($, td[1]);
+    const pe = cellText($, td[2]);
+    items.push({
+      title: title.slice(0, 500),
+      url: new URL(href, pageUrl).href,
+      published: parseDate(cellText($, td[3])),
+      org: [ministry, pe].filter(Boolean).join(' › '),
+      context: `${title}. ${pe}. Closing ${cellText($, td[4])}`.slice(0, 1000),
+    });
+  });
+  return items;
+}
+
+// BPPA spells some ministries differently from e-GP; use e-GP's names so the
+// dashboard's ministry list has one entry per ministry.
+const BPPA_MINISTRY_NAMES = {
+  'Ministry of Energy, Power and Minearal Resources': 'Ministry of Energy, Power and Mineral Resources',
+  'Ministry of Environment and Forests': 'Ministry of Environment, Forest and Climate Change',
+  'Ministry of Information': 'Ministry of Information And Broadcasting',
+};
+
+/** BPPA's ministry filter options: [{id, name}]. */
+export function bppaMinistries(html) {
+  const $ = cheerio.load(html);
+  return $('select[name="ministryId.id"] option').map((_, o) => {
+    const name = clean($(o).text());
+    return { id: $(o).attr('value'), name: BPPA_MINISTRY_NAMES[name] || name };
+  }).get()
+    .filter((m) => m.id && m.id !== '0');
+}
