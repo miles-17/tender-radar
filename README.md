@@ -21,6 +21,14 @@ Dashboard: http://127.0.0.1:8642
 Each tender is labelled `software`, `it` (hardware / networking) or `other`, with a 0–100 %
 software score. The search box ranks results by meaning using the same model.
 
+Only new tenders are kept, from the start date in the `settings` table (`since`, set on the first
+run) onwards:
+
+- a tender whose page date is before the start date is skipped;
+- an undated tender that was already listed at a site's first successful scrape is treated as old.
+
+Skipped notices are recorded in the `ignored` table, so later scrapes don't re-add them.
+
 Sites behind a captcha or bot check (Southeast Bank, Shahjalal Islami Bank, IFIC Bank, and at times
 Bengal Commercial Bank, at the time of writing) are reported as "Blocked" on the dashboard and are
 not bypassed. Check those manually.
