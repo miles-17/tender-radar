@@ -9,21 +9,31 @@ const CHROME_TAGS = 'header,nav,footer,script,style,noscript,svg,[role=navigatio
 const CHROME_TOKEN = /^(?:(?:site|main|top|page|mobile|mega)[-_])?(?:header|footer|menu|navbar|nav|navigation|sidebar|breadcrumbs?|social|offcanvas|topbar)(?:[-_](?:wrap|wrapper|area|section|menu|inner|top|bottom|links|widget))?$/i;
 
 function stripChrome($) {
-  $(CHROME_TAGS).not('body,html').remove();
-  $('form').filter((_, el) => !$(el).find('table').length).remove();
-  $('[class],[id]').each((_, el) => {
+  // Broken markup (an unclosed <header>) can swallow the whole page body;
+  // an element holding most of the page's links is content, not chrome.
+  // Decided before any removal: removing a nested menu first would shrink the count.
+  const links = $('body a[href]').length;
+  // Must also wrap real content blocks: on sparse pages a plain menu can hold half the links.
+  const pageHolders = new Set(links > 20 ? $(`${CHROME_TAGS},form`).filter((_, el) =>
+    $(el).find('a[href]').length > links / 2 && $(el).find('main,section,article,table').length > 0).get() : []);
+  const isPage = ($el) => pageHolders.has($el.get(0));
+  $(CHROME_TAGS).not('body,html').filter((_, el) => !isPage($(el))).remove();
+  $('form').filter((_, el) => !$(el).find('table').length && !isPage($(el))).remove();
+  // Containers only: some sites put class="menu" on the tender links themselves.
+  $('[class],[id]').not('a').each((_, el) => {
     const $el = $(el);
     const tokens = `${$el.attr('class') || ''} ${$el.attr('id') || ''}`.split(/\s+/);
-    if (tokens.some((t) => CHROME_TOKEN.test(t)) && !$el.find('table').length) $el.remove();
+    if (tokens.some((t) => CHROME_TOKEN.test(t)) && !$el.find('table').length && !isPage($el)) $el.remove();
   });
 }
 
 const MONTHS = 'jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec';
+// Digit lookarounds, not \b: pages glue labels to dates ("STARTS12-Nov-2026ENDS").
 const DATE_RE = new RegExp(
-  String.raw`\b(\d{1,2})(?:st|nd|rd|th)?[\s\-./,]+(${MONTHS})[a-z]*[\s\-./,]+(\d{4})\b` +
-  String.raw`|\b(${MONTHS})[a-z]*[\s\-./]+(\d{1,2})(?:st|nd|rd|th)?,?[\s\-./]+(\d{4})\b` +
-  String.raw`|\b(\d{1,2})[\-./](\d{1,2})[\-./](\d{4})\b` +
-  String.raw`|\b(\d{4})[\-./](\d{1,2})[\-./](\d{1,2})\b`,
+  String.raw`(?<!\d)(\d{1,2})(?:st|nd|rd|th)?[\s\-./,]+(${MONTHS})[a-z]*[\s\-./,]+(\d{4})(?!\d)` +
+  String.raw`|\b(${MONTHS})[a-z]*[\s\-./]+(\d{1,2})(?:st|nd|rd|th)?,?[\s\-./]+(\d{4})(?!\d)` +
+  String.raw`|(?<!\d)(\d{1,2})[\-./](\d{1,2})[\-./](\d{4})(?!\d)` +
+  String.raw`|(?<!\d)(\d{4})[\-./](\d{1,2})[\-./](\d{1,2})(?!\d)`,
   'i',
 );
 
@@ -47,7 +57,9 @@ export function parseDate(text) {
 const TENDER_RE = /tender|rfp|rfq|rfi|request for|proposal|quotation|eoi|expression of interest|procure|enlist|bid|invitation|supply|purchase|vendor|software|system|solution|re-?tender|corrigendum|addendum|notice/i;
 const DOC_RE = /\.(?:pdf|docx?|xlsx?|zip|rar)(?:[?#]|$)/i;
 // Obvious non-tender noise that shows up in content areas.
-const NOISE_RE = /^(?:(?:read|view|learn|click|see)\s*(?:more|here|details|now)?|download(?:\s*(?:now|here|file|pdf|link))?|preview\s*\w*|details|more|pdf|here|apply now|home|back|next|previous|(?:go|skip) to \w+(?: \w+)?|\d+)$/i;
+const NOISE_RE = /^(?:(?:read|view|learn|click|see)\s*(?:more|here|details|now)?|download(?:\s*(?:now|here|file|pdf|link))?|preview\s*\w*|details|more|open|pdf(?: file)?|here|apply now|for better view|tender notice|home|back|next|previous|(?:go|skip) to \w+(?: \w+)?|\d+)$/i;
+// Ignore wrapping symbols: "[+]Details", "» Download".
+const isNoise = (t) => NOISE_RE.test(t.replace(/^\W+|\W+$/g, ''));
 
 /**
  * @param {string} html
@@ -66,11 +78,18 @@ export function extractItems(html, pageUrl, cfg = {}) {
   // listRow: a dated table row linking to a document. On a tender page that is
   // a notice even when its title has no tender word (e.g. "Digital Banking Revamp").
   const add = (title, href, context, listRow = false) => {
-    title = clean(title);
-    if (!title || title.length < 8 || NOISE_RE.test(title)) return;
+    title = clean(title).replace(/^click (?:here )?to download (?:the )?/i, '');
+    if (!title || title.length < 8 || isNoise(title)) return;
     let url = null;
     if (href && !/^(javascript:|mailto:|tel:)/i.test(href) && href !== '#') {
       try { url = new URL(href, pageUrl).href; } catch { /* bad href */ }
+    }
+    // Title is only "Tender Notice" (+ start/end dates): the real subject is in an
+    // image, but the document's filename often names it ("Steel_Furniture.pdf").
+    const bare = title.replace(/\b(?:starts?|ends?|closing|deadline)(?![a-z])|for better view/gi, ' ').replace(DATE_RE, ' ').replace(DATE_RE, ' ');
+    if (url && /^\W*(?:tender\s*notice|notice|tender)\W*$/i.test(bare)) {
+      const name = decodeURIComponent(url.split(/[?#]/)[0].split('/').pop() || '').replace(DOC_RE, '').replace(/[_+.-]+/g, ' ').trim().replace(/^tende?r?\s*notice\s+(?=.*[a-z]{3})/i, '');
+      if (/[a-z]{3}/i.test(name) && !/^\W*(?:tende?r?\s*notice|notice|tender)\W*[\d\s]*$/i.test(name)) title = `${clean(bare)}: ${name}`;
     }
     const requireKw = cfg.keywords ?? !cfg.item;
     if (requireKw && !listRow && !TENDER_RE.test(`${title} ${url || ''}`)) return;
@@ -100,9 +119,17 @@ export function extractItems(html, pageUrl, cfg = {}) {
     root.find('a[href]').each((_, el) => {
       const $a = $(el);
       let title = clean($a.text());
-      const $row = $a.closest('tr,li,article,.card,p,div');
+      let $row = $a.closest('tr,li,article,.card,p,div');
+      // A row holding nothing but the link ("For Better View"): climb to the
+      // enclosing block, which carries the notice's title and dates.
+      // Document links only, into a small block: menu links would climb into whole menus.
+      for (let up = 0; up < 3 && /\.(?:pdf|docx?|xlsx?|zip|rar|jpe?g|png)(?:[?#]|$)/i.test($a.attr('href')) && $row.length && !$row.is('tr') && clean($row.text()) === clean($a.text()); up++) {
+        const $up = $row.parent().closest('li,article,.card,div');
+        if (!$up.length || clean($up.text()).length > 300) break;
+        $row = $up;
+      }
       // Bare "Download"/"View" links: take the title from the surrounding row.
-      if (!title || NOISE_RE.test(title)) {
+      if (!title || isNoise(title)) {
         const $tr = $a.closest('tr');
         title = $tr.length
           ? $tr.find('td').map((__, td) => clean($(td).text())).get().sort((x, y) => y.length - x.length)[0]

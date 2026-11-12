@@ -2,6 +2,7 @@
 //   html   - generic link/table scan (src/extract.js extractItems)
 //   json   - tender rows embedded as JSON in <script> (Next.js sites)
 //   rupali - Rupali Bank's DataTables POST endpoint
+//   auto   - embedded JSON and HTML scan, merged (same as sites added from the dashboard)
 // `scope` (optional) narrows the html scan to a CSS selector.
 export const SITES = [
   { id: 'nrb', name: 'NRB Bank', url: 'https://www.nrbbankbd.com/forms-downloads/', kind: 'html' },
@@ -20,4 +21,24 @@ export const SITES = [
   { id: 'sebl', name: 'Southeast Bank', url: 'https://www.southeastbank.com.bd/?page=request_for_proposal', kind: 'html' },
   { id: 'citizens', name: 'Citizens Bank', url: 'https://www.citizensbankbd.com/invitation-tender', kind: 'html' },
   { id: 'ific', name: 'IFIC Bank', url: 'https://ificbank.com.bd/notice', kind: 'html' },
+  { id: 'aibl', name: 'Al-Arafah Islami Bank', url: 'https://www.aibl.com.bd/tender/', kind: 'auto' },
+  { id: 'bankasia', name: 'Bank Asia', url: 'https://www.bankasia-bd.com/home/tender', kind: 'auto' },
+  { id: 'bgcb', name: 'Bengal Commercial Bank', url: 'https://www.bgcb.com.bd/e-tender', kind: 'auto' },
+  { id: 'ebl', name: 'Eastern Bank', url: 'https://www.ebl.com.bd/ICT-Tender-Notice', kind: 'auto' },
+  { id: 'exim', name: 'EXIM Bank', url: 'https://www.eximbankbd.com/media/tender', kind: 'auto' },
+  { id: 'fsibl', name: 'First Security Islami Bank', url: 'https://fsibplc.com/tender.php', kind: 'auto' },
+  { id: 'icbib', name: 'ICB Islamic Bank', url: 'https://icbislamic-bd.com/tenders/', kind: 'auto' },
+  { id: 'meghna', name: 'Meghna Bank', url: 'https://www.meghnabank.com.bd/notice-board', kind: 'auto' },
+  { id: 'midland', name: 'Midland Bank', url: 'https://www.midlandbankbd.net/tender/', kind: 'auto' },
+  { id: 'modhumoti', name: 'Modhumoti Bank', url: 'https://www.modhumotibankplc.com/tender/', kind: 'auto' },
+  { id: 'nbl', name: 'National Bank', url: 'https://www.nblbd.com/tender-auction', kind: 'auto' },
+  { id: 'ncc', name: 'NCC Bank', url: 'https://www.nccbank.com.bd/NccbTender', kind: 'auto' },
+  { id: 'nrbc', name: 'NRBC Bank', url: 'https://www.nrbcommercialbank.com/Tender', kind: 'auto' },
+  { id: 'premier', name: 'Premier Bank', url: 'https://thepremierbankplc.com/procurement/', kind: 'auto' },
+  { id: 'sbac', name: 'SBAC Bank', url: 'https://www.sbacbank.com/e-tender', kind: 'auto' },
+  { id: 'sibl', name: 'Social Islami Bank', url: 'https://www.siblbd.com/media', kind: 'auto' },
+  { id: 'stdislami', name: 'Standard Islami Bank', url: 'https://www.standardbankbd.com/en/page/dynamic-list/tender', kind: 'auto' },
+  { id: 'trust', name: 'Trust Bank', url: 'https://www.tblbd.com/tenders/', kind: 'auto' },
+  { id: 'union', name: 'Union Bank', url: 'https://unionbank.com.bd/tender-notice-', kind: 'auto' },
+  { id: 'uttara', name: 'Uttara Bank', url: 'https://www.uttarabank-bd.com/tender', kind: 'auto' },
 ];

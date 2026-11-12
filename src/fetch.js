@@ -3,6 +3,11 @@
 // curl (not Node fetch) because some bank WAFs challenge Node's TLS client.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { connect, rootCertificates } from 'node:tls';
+import { X509Certificate } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { extractItems, extractJsonItems } from './extract.js';
 
 const run = promisify(execFile);
@@ -12,14 +17,60 @@ const TIMEOUT_S = 45;
 export class BlockedError extends Error {}
 
 // Phrases only bot-check pages contain (a bare "captcha" also matches normal forms).
-const CHALLENGE_RE = /security check required|what code is in the image|testing whether you are a human|<title>just a moment\.\.\.<\/title>|cf-chl-|incapsula incident/i;
+const CHALLENGE_RE = /security check required|what code is in the image|testing whether you are a human|<title>just a moment\.\.\.<\/title>|cf-chl-|incapsula incident|http-equiv="CacheControl" content="no-cache"\/>\s*<script[^>]*>\s*function SHA1\(/i;
 
-async function curl(url, { method = 'GET', body, headers = {} } = {}) {
+// Some bank servers don't send their intermediate certificate (curl error 60).
+// Browsers fetch it from the URL in the site certificate (AIA "CA Issuers");
+// do the same. The fetched cert is only a chain candidate: curl still has to
+// verify the whole chain up to a trusted root, so nothing is trusted blindly.
+const CA_BUNDLE = join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'ca-bundle.pem');
+const intermediates = new Map(); // AIA URL -> PEM
+const needsBundle = new Set(); // hostnames
+
+function issuerUrl(host) {
+  return new Promise((resolve, reject) => {
+    // Unverified on purpose: we only read the certificate's AIA field here.
+    const sock = connect({ host, port: 443, servername: host, rejectUnauthorized: false }, () => {
+      const cert = sock.getPeerCertificate();
+      sock.end();
+      resolve(cert?.infoAccess?.['CA Issuers - URI']?.[0]);
+    });
+    sock.setTimeout(20_000, () => sock.destroy(new Error('TLS timeout')));
+    sock.on('error', reject);
+  });
+}
+
+async function addIntermediate(url) {
+  const host = new URL(url).hostname;
+  const aia = await issuerUrl(host).catch(() => null);
+  if (!aia || !/^http:\/\//.test(aia)) return false;
+  if (!intermediates.has(aia)) {
+    const { stdout } = await run('curl', ['-sS', '-L', '-m', '30', '--', aia], { encoding: 'buffer', maxBuffer: 1 << 20 });
+    intermediates.set(aia, new X509Certificate(stdout).toString()); // DER or PEM in, PEM out
+    mkdirSync(dirname(CA_BUNDLE), { recursive: true });
+    writeFileSync(CA_BUNDLE, [...rootCertificates, ...intermediates.values()].join('\n'));
+  }
+  needsBundle.add(host);
+  return true;
+}
+
+async function curl(url, opts = {}) {
+  const host = new URL(url).hostname;
+  try {
+    return await curlOnce(url, opts, needsBundle.has(host));
+  } catch (err) {
+    if (err.code !== 60 || needsBundle.has(host) || !(await addIntermediate(url))) throw err;
+    return curlOnce(url, opts, true);
+  }
+}
+
+async function curlOnce(url, { method = 'GET', body, headers = {} } = {}, bundle = false) {
   const args = ['-sS', '-L', '--compressed', '-m', String(TIMEOUT_S), '-A', UA,
     '-H', 'accept: text/html,application/json;q=0.9,*/*;q=0.8', '-w', '\n%{http_code}'];
   for (const [k, v] of Object.entries(headers)) args.push('-H', `${k}: ${v}`);
   if (method !== 'GET') args.push('-X', method);
   if (body) args.push('--data', String(body));
+  if (bundle) args.push('--cacert', CA_BUNDLE);
   args.push('--', url);
   const { stdout } = await run('curl', args, { maxBuffer: 64 * 1024 * 1024 });
   const cut = stdout.lastIndexOf('\n');
