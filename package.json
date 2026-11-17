@@ -1,17 +1,18 @@
 {
-  "name": "tender-scraper",
-  "version": "1.0.0",
+  "name": "tender-radar",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "node src/main.js",
-    "scrape-once": "node src/main.js --once"
+    "setup-db": "node scripts/setup-db.mjs"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.3.2",
-    "cheerio": "^1.2.0"
+    "@huggingface/transformers": "4.3.2",
+    "cheerio": "^1.2.0",
+    "postgres": "^3.4.9",
+    "undici": "^7.30.2"
   }
 }

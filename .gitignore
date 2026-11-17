@@ -1,12 +1,6 @@
 # Installed packages: recreate with `npm install`
 node_modules/
 
-# Embedding model cache: downloaded automatically on first run
-models/
-
-# Scraped data (SQLite database)
-data/
-
 # Personal notes
 Embedded model Understand.txt
 
@@ -14,3 +8,6 @@ Embedded model Understand.txt
 *.log
 .DS_Store
 .vscode/
+
+# Netlify CLI build output and local settings
+.netlify/

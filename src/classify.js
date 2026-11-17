@@ -1,10 +1,11 @@
-// Local embedding model (bge-small-en-v1.5, ~34 MB, CPU) scores each tender
+// Embedding model (bge-small-en-v1.5, ~34 MB, CPU) scores each tender
 // against prototype descriptions of software work vs IT hardware vs other.
 import { pipeline, env } from '@huggingface/transformers';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
-env.cacheDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'models');
+// Downloaded from Hugging Face on first use; /tmp is the only writable place in a function.
+env.cacheDir = join(tmpdir(), 'tender-radar-models');
 const MODEL = 'Xenova/bge-small-en-v1.5';
 
 const PROTOTYPES = {
@@ -95,11 +96,6 @@ async function prototypes() {
     for (const [k, texts] of Object.entries(PROTOTYPES)) protoVecs[k] = await embed(texts);
   }
   return protoVecs;
-}
-
-export async function embedQuery(text) {
-  // bge models expect this prefix on short retrieval queries.
-  return (await embed([`Represent this sentence for searching relevant passages: ${text}`]))[0];
 }
 
 /**

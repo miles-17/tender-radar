@@ -4,97 +4,168 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tender Radar</title>
+<meta name="description" content="Bank and government tenders for software work, from Bangladeshi bank tender pages, e-GP and BPPA.">
 <script>
   // Apply the saved theme before first paint, so the page never flashes the wrong one.
   try { const t = localStorage.getItem('tr-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gochi+Hand&family=Shantell+Sans:wght,BNCE,INFM@300..800,-100..100,0..100&display=swap">
 <style>
-  :root {
-    --bg: #f6f7f9; --panel: #fff; --text: #1b1f24; --muted: #667085; --line: #e4e7ec;
-    --accent: #2563eb; --accent-soft: #e8efff; --ok: #12805c; --warn: #b54708; --bad: #c01048;
-    --new: #7a2ff0;
-  }
-  /* Dark: follows the system unless the theme switch picked one (data-theme on <html>). */
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0f1216; --panel: #171b21; --text: #e6e9ee; --muted: #98a2b3; --line: #2a3039;
-      --accent: #6b9bff; --accent-soft: #1d2a45; --ok: #3ccb8f; --warn: #f5a524; --bad: #ff6b8a; --new: #b18cff;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #0f1216; --panel: #171b21; --text: #e6e9ee; --muted: #98a2b3; --line: #2a3039;
-    --accent: #6b9bff; --accent-soft: #1d2a45; --ok: #3ccb8f; --warn: #f5a524; --bad: #ff6b8a; --new: #b18cff;
-  }
-  :root { color-scheme: light; }
-  :root[data-theme="dark"] { color-scheme: dark; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
-  #theme { min-width: 40px; }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); }
-  .bar { max-width: 1200px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  h1 { font-size: 18px; margin: 0 12px 0 0; letter-spacing: -.01em; }
-  .meta { color: var(--muted); font-size: 13px; }
-  .spacer { flex: 1; }
-  button, select, input { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
-  button { cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button:disabled { opacity: .6; cursor: default; }
-  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-  .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
-  .tabs button { border: 0; border-radius: 0; border-right: 1px solid var(--line); }
-  .tabs button:last-child { border-right: 0; }
-  .tabs button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  #q { flex: 1 1 260px; min-width: 0; }
-  .count { color: var(--muted); margin: 4px 0 10px; font-size: 13px; }
-  .list { display: grid; gap: 8px; }
-  .item { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; }
-  .item a.title { color: var(--text); text-decoration: none; font-weight: 600; }
-  .item a.title:hover { color: var(--accent); text-decoration: underline; }
-  .sub { color: var(--muted); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; }
-  .bank { color: var(--accent); font-weight: 600; }
-  .badge { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; }
-  .badge.new { color: var(--new); }
-  .score { grid-row: 1 / span 2; grid-column: 2; align-self: center; width: 84px; text-align: right; font-size: 12px; color: var(--muted); }
-  .meter { height: 6px; border-radius: 3px; background: var(--line); margin-top: 4px; overflow: hidden; }
-  .meter > i { display: block; height: 100%; background: var(--accent); }
-  details.sites { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 14px; }
-  details.sites summary { cursor: pointer; padding: 10px 14px; font-weight: 600; }
-  .sitegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; padding: 0 14px 14px; }
-  .site { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
-  .site b { display: block; }
-  .site .st.ok { color: var(--ok); } .site .st.blocked { color: var(--warn); } .site .st.err { color: var(--bad); }
-  .site a { color: var(--accent); }
-  .site .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
-  .site .remove { padding: 2px 8px; font-size: 12px; color: var(--bad); }
-  .addsite { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 0 14px 12px; }
-  .addsite input { flex: 1 1 200px; min-width: 0; }
-  .addsite #newName { flex-basis: 160px; }
-  .addsite .meta.err { color: var(--bad); }
-  .range { display: inline-flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .range[hidden] { display: none; }
-  .range label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
-  .sections { margin-bottom: 12px; }
-  .sections button { font-weight: 600; }
-  .org { color: var(--text); }
-  select[hidden] { display: none; }
-  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
-  @media (max-width: 600px) {
-    .item { grid-template-columns: 1fr; }
-    .score { grid-row: auto; grid-column: 1; width: auto; text-align: left; }
-    .meter { width: 120px; }
-  }
+/* Hallmark · shape: app screen · genre: playful · theme: custom · redesign: full · idea: "the tender board as a classroom chalkboard, software scores ringed in chalk" · vibe: "chalkboard doodles, peach chalk, hand lettering"
+ * paper: oklch(27% 0.006 70) chalkboard, oklch(97.5% 0.006 85) whiteboard · accent: oklch(82% 0.11 65) peach chalk · display: Shantell Sans · body: Shantell Sans · outlier: Gochi Hand (wordmark)
+ * nav: kept, a top bar with the wordmark in a chalk frame · signature: the software score as a chalk ring filled to its percentage · states: loading, empty, full (no error state in the app's logic)
+ * axes: mid/handwritten/warm · posture: full palette (board, chalk, peach signal, pastel status chalks) · modes: light+dark · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S5 R4 V5 · weakest: E, chalk edges come from one SVG filter applied to pseudo-elements only, so text stays crisp and every outline stays a real border */
+/* Hallmark · waive 47c · chalk outlines sit only on real controls, rules and the score ring, never a drawn object · the user asked for the chalkboard look of their reference board, so the tender board is drawn in chalk */
+/* Hallmark · waive 49b · tender titles wrap inside the list rows at narrow widths · each title is the bank's own notice wording, often fifteen words or more, and the row is where it is read */
+/* Hallmark · finish-review: subagent · 8 findings · 6 resolved 2 partial · gap: density (about 6 rows at 1440x900 against 9 before), search hint cut after "mobile app" at 1440 */
+@import url("./tokens.css");
+@import url("./base.css");
+
+body { font-variation-settings: var(--hand-body); }
+.bar, main { width: 100%; max-width: var(--container); margin-inline: auto; padding-inline: var(--gutter); }
+
+/* Chalk: one SVG filter roughens and grains a line. Applied to pseudo-elements that draw lines, never to text. */
+.chalk-defs { position: absolute; width: 0; height: 0; }
+.chalked { position: relative; isolation: isolate; }
+.chalked::before { content: ""; position: absolute; pointer-events: none; z-index: -1; filter: url(#chalk); }
+
+/* Top bar */
+header { position: sticky; top: 0; z-index: var(--z-sticky-nav); background: var(--color-paper); }
+header::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; border-bottom: var(--chalk-line) solid var(--color-rule); filter: url(#chalk); }
+.bar { display: flex; gap: var(--space-md); align-items: center; flex-wrap: wrap; padding-block: var(--space-md); }
+h1 { margin: 0 var(--space-sm) 0 0; padding: var(--space-2xs) var(--space-md); font: 400 var(--text-wordmark)/1.05 var(--font-outlier); color: var(--color-accent); white-space: nowrap; }
+h1::before { inset: 0; border: var(--chalk-line) solid var(--color-ink-2); border-radius: var(--radius-sketch); }
+h1::after { content: ""; position: absolute; inset: -5px -7px; z-index: -1; pointer-events: none; border: 1px solid var(--color-muted); border-radius: var(--radius-sketch-2); filter: url(#chalk); }
+.meta { color: var(--color-muted); font-size: var(--text-sm); }
+.spacer { flex: 1; }
+
+/* Controls */
+button, select, input { color: var(--color-ink); background: transparent; border: var(--chalk-line) solid var(--color-muted); border-radius: var(--radius-field); min-height: 40px; padding: var(--space-2xs) var(--space-sm); font-variation-settings: var(--hand-body); transition: color var(--dur-micro) var(--ease-out), background-color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out); }
+input::placeholder { color: var(--color-muted); opacity: 1; }
+button { cursor: pointer; white-space: nowrap; }
+button:hover { border-color: var(--color-ink); }
+button:active { transform: translateY(1px); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; transition: none; }
+button:disabled { cursor: not-allowed; opacity: 0.55; color: var(--color-muted); border-style: dashed; transform: none; }
+select:hover, input:hover { border-color: var(--color-ink-2); }
+select { cursor: pointer; }
+#theme { min-width: 40px; display: inline-grid; place-items: center; padding: var(--space-2xs); }
+#theme svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* The one filled control: a chalk-filled blob, like the filled circles on the reference board. */
+#scrape { background: var(--color-ink); color: var(--color-paper); border-color: var(--color-ink); font-weight: 700; padding-inline: var(--space-md); }
+#scrape:hover { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink); }
+#scrape:disabled { background: transparent; color: var(--color-muted); border-color: var(--color-muted); }
+
+main { padding-block: var(--space-lg) var(--space-2xl); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-md); }
+
+/* Banks / Ministries: the two boards, written large, the open one underlined in chalk. */
+.sections { display: flex; gap: var(--space-lg); overflow-x: auto; scrollbar-width: none; padding-block: var(--space-2xs) var(--space-xs); }
+.sections button { border: 0; border-radius: var(--radius-card); min-height: 44px; padding: 0 var(--space-2xs); font-size: var(--text-xl); font-weight: 700; font-variation-settings: var(--hand-loose); color: var(--color-muted); }
+.sections button:hover { color: var(--color-ink); }
+.sections button[aria-pressed=true] { color: var(--color-accent); }
+.sections button[aria-pressed=true]::before { left: -2px; right: -2px; bottom: 2px; height: 8px; border-bottom: 3px solid var(--color-accent); border-radius: var(--radius-sketch-2); }
+
+/* Filters */
+.filters { display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center; }
+#tabs { display: flex; gap: var(--space-2xs); overflow-x: auto; scrollbar-width: none; padding: var(--space-2xs) var(--space-xs); }
+#tabs button { border-color: transparent; color: var(--color-ink-2); padding-inline: var(--space-sm); }
+#tabs button:hover { color: var(--color-ink); border-color: transparent; }
+#tabs button[aria-pressed=true] { color: var(--color-accent); font-weight: 700; }
+#tabs button[aria-pressed=true]::before { inset: -3px -2px; border: var(--chalk-line) solid var(--color-accent); border-radius: 50%; }
+#q { flex: 1 1 300px; min-width: 0; }
+#site, #org { width: 15rem; max-width: 100%; }
+.range { display: inline-flex; gap: var(--space-xs); flex-wrap: wrap; align-items: center; }
+.range label { display: inline-flex; gap: var(--space-xs); align-items: center; color: var(--color-muted); font-size: var(--text-sm); }
+.count { color: var(--color-muted); font-size: var(--text-sm); margin-top: var(--space-xs); }
+
+/* Tenders: rows on the board, parted by chalk rules. */
+.list { display: grid; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-lg); align-items: center; padding: var(--space-sm) var(--space-2xs); }
+.item .body { display: grid; gap: var(--space-2xs); min-width: 0; }
+.item + .item::before { left: 0; right: 0; top: -1px; height: 4px; border-top: var(--chalk-line) solid var(--color-rule); border-radius: var(--radius-sketch); }
+.item .title { color: var(--color-ink); font-size: var(--text-title); font-weight: 700; line-height: 1.35; text-decoration: none; overflow-wrap: break-word; }
+.item a.title:hover { color: var(--color-accent); text-decoration: underline; text-decoration-thickness: 2px; }
+.sub { color: var(--color-muted); font-size: var(--text-sm); display: flex; gap: var(--space-2xs) var(--space-md); flex-wrap: wrap; align-items: center; }
+.bank { color: var(--color-ink-2); font-weight: 700; }
+.org { color: var(--color-ink-2); }
+.badge { color: var(--color-accent); font-weight: 700; padding: 0 var(--space-xs); }
+.badge::before { inset: -2px -4px; border: var(--chalk-line) solid var(--color-accent); border-radius: 50%; }
+
+/* Signature: the software score, ringed in chalk and filled to its percentage. */
+.score { display: grid; place-items: center; }
+.ring { position: relative; width: 64px; height: 64px; display: grid; place-items: center; }
+.ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); filter: url(#chalk); overflow: visible; }
+.ring circle { fill: none; stroke-width: var(--ring-stroke); stroke-linecap: round; }
+.ring .track { stroke: var(--color-rule); stroke-dasharray: 3 5; }
+.ring .fill { stroke: var(--color-accent); stroke-dasharray: var(--p) 100; }
+.ring b { position: relative; font-size: var(--text-sm); font-weight: 700; color: var(--color-ink); font-variant-numeric: tabular-nums; }
+
+.empty { padding: var(--space-3xl) 0; text-align: center; color: var(--color-muted); font-size: var(--text-lg); font-variation-settings: var(--hand-loose); }
+
+/* Sources: a chalk-ruled list of every page we read. */
+details.sites { margin-bottom: var(--space-xs); }
+details.sites summary { cursor: pointer; width: fit-content; min-height: 44px; display: flex; align-items: center; gap: var(--space-xs); font-size: var(--text-lg); font-weight: 700; color: var(--color-ink); border-radius: var(--radius-card); }
+details.sites summary:hover { color: var(--color-accent); }
+details.sites summary::-webkit-details-marker { display: none; }
+details.sites summary::after { content: "+"; font-weight: 400; color: var(--color-muted); }
+details.sites[open] summary::after { content: "\2212"; }
+details.sites summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 4px; }
+.addsite { display: flex; gap: var(--space-xs); flex-wrap: wrap; align-items: center; padding-block: var(--space-sm) var(--space-lg); }
+.addsite input { flex: 1 1 220px; min-width: 0; }
+.addsite #newName { flex-basis: 180px; }
+.addsite button { color: var(--color-accent); border-color: var(--color-accent); font-weight: 700; }
+.addsite button:hover { background: var(--color-accent); color: var(--color-accent-ink); }
+.addsite .meta.err { color: var(--color-error); }
+.sitegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 0 var(--gap-columns); }
+.site { padding: var(--space-sm) 0; font-size: var(--text-sm); color: var(--color-ink-2); }
+.site::before { left: 0; right: 0; top: 0; height: 4px; border-top: 1.5px solid var(--color-rule); border-radius: var(--radius-sketch-2); }
+.site b { display: block; color: var(--color-ink); font-size: var(--text-md); }
+.site .st { display: block; }
+.site .st.ok { color: var(--color-success); } .site .st.blocked { color: var(--color-warn); } .site .st.err { color: var(--color-error); }
+.site .meta { display: block; }
+.site .actions { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-2xs); }
+.site a { color: var(--color-accent); }
+.site .remove { min-height: 32px; padding: 0 var(--space-xs); border-color: transparent; color: var(--color-error); font-size: var(--text-sm); }
+.site .remove:hover { border-color: var(--color-error); }
+
+@media (max-width: 40rem) {
+  :root { --text-wordmark: 1.375rem; }
+  .bar { gap: var(--space-xs); }
+  .bar .spacer { display: none; }
+  #theme { margin-left: auto; }
+  h1 { padding-inline: var(--space-sm); margin-right: 0; }
+  #scrape { padding-inline: var(--space-sm); }
+  #runinfo { order: 5; flex-basis: 100%; }
+  .sections button { font-size: var(--text-lg); }
+  .item { gap: var(--space-sm); }
+  .sections, #tabs { flex-wrap: wrap; overflow-x: visible; }
+  .sections { gap: var(--space-2xs) var(--space-md); }
+  #site, #org, #days { flex: 1 1 calc(50% - var(--space-sm)); width: auto; min-width: 0; }
+  .ring { width: 52px; height: 52px; }
+  .ring b { font-size: var(--text-xs); }
+}
 </style>
 </head>
 <body>
+<svg class="chalk-defs" aria-hidden="true" focusable="false">
+  <filter id="chalk" x="-10%" y="-60%" width="120%" height="220%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="4" result="wobble"/>
+    <feDisplacementMap in="SourceGraphic" in2="wobble" scale="3.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="1" seed="9" result="grit"/>
+    <feColorMatrix in="grit" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -1.7 0 0 0 1.55" result="dust"/>
+    <feComposite in="rough" in2="dust" operator="in"/>
+  </filter>
+</svg>
 <header>
   <div class="bar">
-    <h1>Tender Radar</h1>
+    <h1 class="chalked">Tender Radar</h1>
     <span class="meta" id="runinfo">loading…</span>
     <span class="spacer"></span>
     <button id="theme" type="button"></button>
-    <button class="primary" id="scrape">Scrape now</button>
+    <button class="primary" id="scrape" type="button">Scrape now</button>
   </div>
 </header>
 <main>
@@ -110,15 +181,15 @@
   </details>
 
   <div class="tabs sections" id="sections" role="group" aria-label="Section">
-    <button data-section="bank" aria-pressed="true">Banks</button>
-    <button data-section="gov" aria-pressed="false">Ministries &amp; Departments</button>
+    <button class="chalked" data-section="bank" aria-pressed="true" type="button">Banks</button>
+    <button class="chalked" data-section="gov" aria-pressed="false" type="button">Ministries &amp; Departments</button>
   </div>
   <div class="filters">
     <div class="tabs" id="tabs" role="group" aria-label="Category">
-      <button data-cat="software" aria-pressed="true">Software</button>
-      <button data-cat="it" aria-pressed="false">IT / hardware</button>
-      <button data-cat="other" aria-pressed="false">Other</button>
-      <button data-cat="all" aria-pressed="false">All</button>
+      <button class="chalked" data-cat="software" aria-pressed="true" type="button">Software</button>
+      <button class="chalked" data-cat="it" aria-pressed="false" type="button">IT / hardware</button>
+      <button class="chalked" data-cat="other" aria-pressed="false" type="button">Other</button>
+      <button class="chalked" data-cat="all" aria-pressed="false" type="button">All</button>
     </div>
     <select id="site" aria-label="Bank"><option value="">All banks</option></select>
     <select id="org" aria-label="Ministry or division" hidden><option value="">All ministries &amp; departments</option></select>
@@ -133,7 +204,7 @@
       <label>From <input type="date" id="from"></label>
       <label>To <input type="date" id="to"></label>
     </span>
-    <input id="q" type="search" placeholder="Search by meaning, e.g. “mobile app” or “core banking”">
+    <input id="q" type="search" placeholder="Search by meaning, e.g. “mobile app” or “core banking”" aria-label="Search tenders">
   </div>
   <div class="count" id="count"></div>
   <div class="list" id="list"></div>
@@ -162,7 +233,35 @@ function syncControls() {
   $('#range').hidden = state.days !== 'range';
 }
 
+// API calls. Signed out (password cookie expired): reload to show the sign-in page.
+async function api(url, init) {
+  const r = await fetch(url, init);
+  if (r.status === 401) { location.reload(); throw new Error('sign in required'); }
+  return r;
+}
+const getJson = (url) => api(url).then((r) => r.json());
+
+// Search by meaning: the query is embedded here in the browser with the same
+// model the scraper uses (~34 MB, downloaded once, then cached by the browser).
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2';
+let embedder;
+async function queryVector(text) {
+  embedder ??= import(MODEL_URL).then(({ pipeline }) => pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', { dtype: 'q8' }));
+  // bge models expect this prefix on short retrieval queries.
+  const out = await (await embedder)(`Represent this sentence for searching relevant passages: ${text}`, { pooling: 'mean', normalize: true });
+  const bytes = new Uint8Array(Float32Array.from(out.data).buffer);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
 let reqId = 0;
+// The software score as a chalk ring filled to its percentage, the number inside.
+function ring(score) {
+  const pct = Math.round((score ?? 0) * 100);
+  return `<span class="ring" style="--p:${pct}"><svg viewBox="0 0 44 44" aria-hidden="true" focusable="false"><circle class="track" cx="22" cy="22" r="19" pathLength="100"/><circle class="fill" cx="22" cy="22" r="19" pathLength="100"/></svg><b>${pct}%</b></span>`;
+}
+
 async function loadTenders() {
   try { localStorage.setItem('tr-filters', JSON.stringify(state)); } catch {}
   const id = ++reqId;
@@ -173,40 +272,52 @@ async function loadTenders() {
   } else p.set('days', state.days);
   if (state.section === 'bank' && state.site) p.set('site', state.site);
   if (state.section === 'gov' && state.org) p.set('org', state.org);
-  if (state.q) p.set('q', state.q);
+  let byMeaning = false;
+  if (state.q) {
+    p.set('q', state.q);
+    $('#count').textContent = embedder ? 'Loading…' : 'Loading search model…';
+    try { p.set('qv', await queryVector(state.q)); byMeaning = true; } catch (e) {
+      embedder = null; // retry next time
+      console.warn('search model unavailable, matching words in titles instead', e);
+    }
+    if (id !== reqId) return;
+  }
   $('#count').textContent = 'Loading…';
-  const rows = await fetch('/api/tenders?' + p).then((r) => r.json());
+  const rows = await getJson('/api/tenders?' + p);
   if (id !== reqId) return;
-  $('#count').textContent = `${rows.length}${rows.length === 500 ? '+' : ''} tender${rows.length === 1 ? '' : 's'} · ${state.q ? 'ranked by meaning' : 'most software-relevant first'}`;
+  $('#count').textContent = !rows.length ? '0 tenders' : `${rows.length}${rows.length === 500 ? '+' : ''} tender${rows.length === 1 ? '' : 's'}, ${byMeaning ? 'ranked by meaning' : state.q ? 'titles containing your words' : 'most software-relevant first'}`;
   const dayAgo = Date.now() - 3 * 86400000;
   $('#list').innerHTML = rows.length ? rows.map((r) => `
-    <article class="item">
+    <article class="item chalked">
+      <div class="body">
       <div>${r.url ? `<a class="title" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.title)}</a>` : `<span class="title">${esc(r.title)}</span>`}</div>
-      <div class="score" title="Software relevance from the embedding model">${Math.round((r.score ?? 0) * 100)}% software<div class="meter"><i style="width:${Math.round((r.score ?? 0) * 100)}%"></i></div></div>
       <div class="sub">
         ${r.org ? `<span class="org" title="${esc(r.org)}">${esc(r.org.split(' › ').slice(0, 3).join(' › '))}</span><span class="bank">${esc(r.site)}</span>` : `<span class="bank">${esc(r.site)}</span>`}
         ${r.published ? `<span>Dated ${fmtDate(r.published)}</span>` : ''}
         <span>First seen ${fmtDate(r.first_seen)}</span>
-        ${new Date(r.first_seen) > dayAgo ? '<span class="badge new">NEW</span>' : ''}
+        ${new Date(r.first_seen) > dayAgo ? '<span class="badge new chalked">new</span>' : ''}
       </div>
+      </div>
+      <div class="score" title="Software relevance from the embedding model">${ring(r.score)}<span class="visually-hidden">software relevance</span></div>
     </article>`).join('') : '<div class="empty">No tenders match these filters.</div>';
 }
 
 async function loadSites() {
-  const { running, sites } = await fetch('/api/sites').then((r) => r.json());
+  const { running, sites } = await getJson('/api/sites');
   const last = sites.map((s) => s.last_run).filter(Boolean).sort().pop();
   $('#runinfo').textContent = running ? 'Scraping now…' : `Last scrape ${ago(last)}`;
   $('#scrape').disabled = running;
   const ok = sites.filter((s) => s.ok).length;
-  $('#sitesSummary').textContent = `Sources · ${ok} of ${sites.length} working`;
+  $('#sitesSummary').textContent = `Sources: ${ok} of ${sites.length} working`;
   $('#sites').innerHTML = sites.map((s) => {
-    const st = s.ok ? ['ok', `OK · ${s.found} on page${s.new_items ? `, ${s.new_items} new` : ''}`]
-      : s.blocked ? ['blocked', 'Blocked by captcha · check manually']
+    const st = s.ok ? ['ok', `OK, ${s.found} on page${s.new_items ? `, ${s.new_items} new` : ''}`]
+      : s.blocked ? ['blocked', 'Blocked by captcha, check manually']
       : s.last_run ? ['err', `Error: ${esc(s.error)}`] : ['', 'Not run yet'];
-    return `<div class="site"><b>${esc(s.name)}</b>
-      <span class="st ${st[0]}">${st[1]}</span><br>
-      <span class="meta">${s.software} software of ${s.total} stored · ${ago(s.last_run)}</span>
-      <div class="actions"><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">Open page ↗</a>
+    return `<div class="site chalked"><b>${esc(s.name)}</b>
+      <span class="st ${st[0]}">${st[1]}</span>
+      <span class="meta">${s.software} software of ${s.total} stored</span>
+      <span class="meta">Checked ${ago(s.last_run)}</span>
+      <div class="actions"><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">Open page</a>
       <button class="remove" data-id="${esc(s.id)}" data-name="${esc(s.name)}" type="button">Remove</button></div></div>`;
   }).join('');
   const sel = $('#site');
@@ -224,7 +335,7 @@ async function loadSites() {
 
 // Ministry dropdown: each ministry, then its divisions, from the tenders we hold.
 async function loadOrgs() {
-  const tree = await fetch('/api/orgs').then((r) => r.json());
+  const tree = await getJson('/api/orgs');
   const sel = $('#org');
   const key = JSON.stringify(tree);
   if (sel.dataset.key === key) return;
@@ -243,7 +354,7 @@ async function loadOrgs() {
 }
 
 const postJson = (url, method, body = {}) =>
-  fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  api(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 $('#addSite').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -298,9 +409,11 @@ async function watchRun() {
 
 // Theme switch: flips between light and dark; the choice is remembered in this browser.
 const isDark = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+const ICON_SUN = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg>';
+const ICON_MOON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20.2 14.6A8.4 8.4 0 0 1 9.4 3.8a8.4 8.4 0 1 0 10.8 10.8z"/></svg>';
 function showTheme() {
   const dark = isDark();
-  $('#theme').textContent = dark ? '☀' : '☾';
+  $('#theme').innerHTML = dark ? ICON_SUN : ICON_MOON;
   $('#theme').title = $('#theme').ariaLabel = dark ? 'Switch to light theme' : 'Switch to dark theme';
 }
 $('#theme').addEventListener('click', () => {
