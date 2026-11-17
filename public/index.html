@@ -93,6 +93,11 @@ main { padding-block: var(--space-lg) var(--space-2xl); display: grid; grid-temp
 .sub { color: var(--color-muted); font-size: var(--text-sm); display: flex; gap: var(--space-2xs) var(--space-md); flex-wrap: wrap; align-items: center; }
 .bank { color: var(--color-ink-2); font-weight: 700; }
 .org { color: var(--color-ink-2); }
+/* Team decisions from the Telegram buttons, and the submission deadline. */
+.mark-bid { color: var(--color-success); font-weight: 700; }
+.mark-taken { color: var(--color-ink-2); font-weight: 700; }
+.closing.soon { color: var(--color-warn); font-weight: 700; }
+.item.dropped .title { color: var(--color-muted); font-weight: 400; }
 .badge { color: var(--color-accent); font-weight: 700; padding: 0 var(--space-xs); }
 .badge::before { inset: -2px -4px; border: var(--chalk-line) solid var(--color-accent); border-radius: 50%; }
 
@@ -289,15 +294,20 @@ async function loadTenders() {
   if (id !== reqId) return;
   $('#count').textContent = !rows.length ? '0 tenders' : `${rows.length}${rows.length === 500 ? '+' : ''} tender${rows.length === 1 ? '' : 's'}, ${byMeaning ? 'ranked by meaning' : state.q ? 'titles containing your words' : 'most software-relevant first'}`;
   const dayAgo = Date.now() - 3 * 86400000;
+  const soon = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   $('#list').innerHTML = rows.length ? rows.map((r) => `
-    <article class="item chalked">
+    <article class="item chalked${r.status === 'not_relevant' ? ' dropped' : ''}">
       <div class="body">
       <div>${r.url ? `<a class="title" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.title)}</a>` : `<span class="title">${esc(r.title)}</span>`}</div>
       <div class="sub">
         ${r.org ? `<span class="org" title="${esc(r.org)}">${esc(r.org.split(' › ').slice(0, 3).join(' › '))}</span><span class="bank">${esc(r.site)}</span>` : `<span class="bank">${esc(r.site)}</span>`}
         ${r.published ? `<span>Dated ${fmtDate(r.published)}</span>` : ''}
         <span>First seen ${fmtDate(r.first_seen)}</span>
+        ${r.closing ? `<span class="closing${r.closing <= soon ? ' soon' : ''}">Closes ${fmtDate(r.closing)}</span>` : ''}
         ${new Date(r.first_seen) > dayAgo ? '<span class="badge new chalked">new</span>' : ''}
+        ${r.status === 'bid' ? `<span class="mark-bid">We'll bid${r.status_by ? ` (${esc(r.status_by)})` : ''}</span>` : ''}
+        ${r.status === 'not_relevant' ? `<span>Not relevant${r.status_by ? ` (${esc(r.status_by)})` : ''}</span>` : ''}
+        ${r.assignee ? `<span class="mark-taken">Taken by ${esc(r.assignee)}</span>` : ''}
       </div>
       </div>
       <div class="score" title="Software relevance from the embedding model">${ring(r.score)}<span class="visually-hidden">software relevance</span></div>

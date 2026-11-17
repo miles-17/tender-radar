@@ -27,6 +27,12 @@ CREATE TABLE IF NOT EXISTS tenders (
   score       real,                          -- software relevance, 0..1
   embedding   vector(384)                    -- bge-small-en-v1.5, normalized
 );
+-- Added with the Telegram bot; ADD COLUMN IF NOT EXISTS upgrades older databases.
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS closing   text;        -- YYYY-MM-DD submission deadline, when the source gives one
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS status    text;        -- team decision: 'bid' | 'not_relevant'
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS assignee  text;        -- who is handling it (Telegram name)
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS status_by text;        -- who set the status
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS marked_at timestamptz; -- when
 CREATE INDEX IF NOT EXISTS tenders_site ON tenders (site_id);
 CREATE INDEX IF NOT EXISTS tenders_cat ON tenders (category, score);
 
@@ -39,6 +45,7 @@ CREATE TABLE IF NOT EXISTS site_status (
   new_items  integer,
   error      text
 );
+ALTER TABLE site_status ADD COLUMN IF NOT EXISTS fails integer NOT NULL DEFAULT 0; -- failed scrapes in a row
 
 CREATE TABLE IF NOT EXISTS settings (key text PRIMARY KEY, value text);
 
@@ -52,6 +59,14 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
   finished  timestamptz
 );
 
+-- Telegram /watch phrases: new tenders that match one are posted right away.
+CREATE TABLE IF NOT EXISTS watches (
+  phrase     text PRIMARY KEY,               -- lower case
+  embedding  vector(384) NOT NULL,
+  added_by   text,
+  added      timestamptz NOT NULL DEFAULT now()
+);
+
 -- Only the server (table owner) uses these tables. RLS with no policies keeps
 -- Supabase's public REST API from reading or writing them.
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
@@ -60,3 +75,4 @@ ALTER TABLE site_status ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ignored ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scrape_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE watches ENABLE ROW LEVEL SECURITY;

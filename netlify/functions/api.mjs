@@ -48,16 +48,17 @@ async function listTenders(params) {
     // Semantic search: the browser embeds the query with the same model; plus a
     // boost for literal matches. Vectors are normalized, so inner product = cosine.
     rows = await sql`SELECT * FROM (
-        SELECT id, site_id, title, url, published, first_seen, category, score, org,
+        SELECT id, site_id, title, url, published, first_seen, category, score, org, closing, status, status_by, assignee,
           -(embedding <#> ${vectorLiteral(queryVector(qv))}::vector)
             + CASE WHEN strpos(lower(title), ${q.toLowerCase()}) > 0 THEN 0.15 ELSE 0 END AS match
         FROM tenders WHERE ${cond} AND embedding IS NOT NULL) t
       WHERE match > 0.55 ORDER BY match DESC LIMIT 500`;
   } else {
-    // Most software-relevant first; newest first among equal scores.
-    rows = await sql`SELECT id, site_id, title, url, published, first_seen, category, score, org
+    // Most software-relevant first; newest first among equal scores. Tenders the
+    // team marked "Not relevant" (in Telegram) go last.
+    rows = await sql`SELECT id, site_id, title, url, published, first_seen, category, score, org, closing, status, status_by, assignee
       FROM tenders WHERE ${cond}
-      ORDER BY score DESC NULLS LAST, COALESCE(published, left(first_seen, 10)) DESC, first_seen DESC
+      ORDER BY status IS NOT DISTINCT FROM 'not_relevant', score DESC NULLS LAST, COALESCE(published, left(first_seen, 10)) DESC, first_seen DESC
       LIMIT 500`;
   }
   const names = Object.fromEntries((await listSites()).map((s) => [s.id, s.name]));

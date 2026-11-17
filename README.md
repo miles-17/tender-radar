@@ -17,7 +17,9 @@ hosted on Netlify.
 | Scrape groups and scrape run | `src/groups.js`, `src/scraper.js` |
 | Dashboard API (`/api/*`) | `netlify/functions/api.mjs` |
 | Scrape every 12 hours | `netlify/functions/scrape-scheduled.mjs` |
-| Telegram digest of new software tenders | `netlify/functions/telegram-digest.mjs` |
+| Telegram bot: messages it posts (digest, alerts, reminders, weekly) | `src/notify.js`, `src/telegram.js` |
+| Telegram bot: commands and buttons (webhook) | `netlify/functions/telegram-background.mjs` |
+| Deadline reminders (daily) and weekly summary (Sundays) | `netlify/functions/telegram-reminders.mjs`, `telegram-weekly.mjs` |
 | Scrape one group (background function, up to 15 minutes) | `netlify/functions/scrape-background.mjs` |
 | Password gate | `netlify/edge-functions/gate.js` |
 | Dashboard | `public/index.html` |
@@ -74,17 +76,45 @@ Netlify (site, functions, password gate) and Supabase (database). Netlify enviro
 | `DATABASE_URL` | Supabase **transaction pooler** connection string (port 6543) |
 | `SITE_PASSWORD` | The shared dashboard password. Changing it signs everyone out. |
 | `SCRAPE_KEY` | Long random string; lets the API and schedule start background scrapes |
-| `TELEGRAM_BOT_TOKEN` | The bot's token from @BotFather (optional: no digest without it) |
-| `TELEGRAM_CHAT_ID` | The Telegram group the digest goes to (a negative number) |
+| `TELEGRAM_BOT_TOKEN` | The bot's token from @BotFather (optional: no Telegram bot without it) |
+| `TELEGRAM_CHAT_ID` | The Telegram group the bot serves (a negative number) |
 
 Scrapes run at 00:00 and 12:00 UTC (6 am and 6 pm in Dhaka). That keeps the site within the
 Netlify Free plan's monthly credits; scraping more often needs a paid plan. Function logs are
 under **Logs → Functions** in the Netlify dashboard.
 
-The Telegram digest runs 30 minutes after each scrape (6:30 am and 6:30 pm in Dhaka). It
-lists the software tenders first seen since the last digest, grouped by institution (the bank,
-or the ministry for government tenders), each title linking to its notice, and sends nothing
-when there are none. The bot must be a member of the group.
+## Telegram bot
+
+The bot serves one group (`TELEGRAM_CHAT_ID`) and ignores every other chat. It posts:
+
+- **Digest**, when a scrape finishes: software tenders first seen since the last digest,
+  grouped by institution (the bank, or the ministry for government tenders), each linking to
+  its notice. Nothing when there are none.
+- **Watch alerts**, when a scrape finds a tender matching a `/watch` phrase (by meaning, the
+  same measure as the dashboard search, at a stricter 0.7).
+- **Site problems**, when a site fails 3 scrapes in a row, and when it works again.
+- **Deadlines**, every day at 9 am in Dhaka: tenders marked "We'll bid" or taken that close
+  today, tomorrow or in 3 days. Deadlines come from e-GP and BPPA lists, and from "date of
+  submission" text in bank notices; tenders without one get no reminder.
+- **Weekly summary**, Sundays at 9 am in Dhaka.
+
+Every tender it lists has three buttons: **We'll bid**, **Not relevant** and **Take it**
+(pressing one again clears it). The dashboard shows these marks, and lists "Not relevant"
+tenders last. Marked tenders also teach the classifier: a new tender much like one marked
+"Not relevant" is scored as not software, and one like a "We'll bid" tender as software.
+
+Commands: `/latest`, `/search words`, `/bank name`, `/watch phrase`, `/unwatch phrase`,
+`/watches`, `/scrape`, `/help`.
+
+Set up (once): add the bot to the group, set the two variables above, deploy, then point the
+bot at the site and fill its command menu:
+
+```bash
+TELEGRAM_BOT_TOKEN=... SCRAPE_KEY=... URL=https://your-site.netlify.app node scripts/setup-telegram.mjs
+```
+
+The webhook only accepts calls carrying a secret derived from `SCRAPE_KEY`, so run the script
+again after changing `SCRAPE_KEY`.
 
 Set up an empty database (creates the tables, seeds the bank list, start date = today; safe to
 re-run, it keeps existing settings and sites):

@@ -68,6 +68,7 @@ export async function saveItems(siteId, items, baseline = false) {
         id, site_id: siteId,
         title: prev?.title ?? it.title, url: prev?.url ?? it.url ?? null, context: prev?.context ?? it.context ?? null,
         published: prev?.published ?? it.published ?? null,
+        closing: it.closing ?? prev?.closing ?? null,
         org: it.org ?? prev?.org ?? null,
         first_seen: now, last_seen: now,
       });
@@ -77,6 +78,7 @@ export async function saveItems(siteId, items, baseline = false) {
       await tx`INSERT INTO tenders ${tx(all.slice(i, i + CHUNK))}
         ON CONFLICT (id) DO UPDATE SET last_seen = excluded.last_seen,
           published = COALESCE(tenders.published, excluded.published),
+          closing = COALESCE(excluded.closing, tenders.closing),
           org = COALESCE(excluded.org, tenders.org)`;
     }
     for (let i = 0; i < skip.length; i += CHUNK) {
@@ -87,21 +89,42 @@ export async function saveItems(siteId, items, baseline = false) {
   });
 }
 
-export const setStatus = (siteId, s) => sql`
-  INSERT INTO site_status (site_id, last_run, ok, blocked, found, new_items, error)
-  VALUES (${siteId}, ${new Date().toISOString()}, ${!!s.ok}, ${!!s.blocked}, ${s.found ?? 0}, ${s.newItems ?? 0}, ${s.error ?? null})
+/** Record a scrape's outcome; returns failed scrapes in a row, now (`fails`) and before (`was`). */
+export const setStatus = async (siteId, s) => (await sql`
+  WITH old AS (SELECT fails FROM site_status WHERE site_id = ${siteId})
+  INSERT INTO site_status (site_id, last_run, ok, blocked, found, new_items, error, fails)
+  VALUES (${siteId}, ${new Date().toISOString()}, ${!!s.ok}, ${!!s.blocked}, ${s.found ?? 0}, ${s.newItems ?? 0}, ${s.error ?? null}, ${s.ok ? 0 : 1})
   ON CONFLICT (site_id) DO UPDATE SET last_run = excluded.last_run, ok = excluded.ok,
-    blocked = excluded.blocked, found = excluded.found, new_items = excluded.new_items, error = excluded.error`;
+    blocked = excluded.blocked, found = excluded.found, new_items = excluded.new_items, error = excluded.error,
+    fails = CASE WHEN excluded.ok THEN 0 ELSE site_status.fails + 1 END
+  RETURNING fails, COALESCE((SELECT fails FROM old), 0) AS was`)[0];
 
 export const unclassified = () => sql`SELECT id, title, context FROM tenders WHERE embedding IS NULL`;
 
-/** @param {{id: string, category: string, score: number, vec: Float32Array}[]} results */
+/**
+ * Store classifications for tenders still unclassified; returns the ids this
+ * call classified (two scrape groups running at once may race for the same rows).
+ * @param {{id: string, category: string, score: number, vec: Float32Array}[]} results
+ */
 export async function saveClass(results) {
+  const ids = [];
   for (let i = 0; i < results.length; i += 200) {
     const values = results.slice(i, i + 200).map((r) => [r.id, r.category, String(r.score), vectorLiteral(r.vec)]);
-    await sql`UPDATE tenders SET category = v.category, score = v.score::real, embedding = v.embedding::vector
-      FROM (VALUES ${sql(values)}) AS v (id, category, score, embedding) WHERE tenders.id = v.id`;
+    const rows = await sql`UPDATE tenders SET category = v.category, score = v.score::real, embedding = v.embedding::vector
+      FROM (VALUES ${sql(values)}) AS v (id, category, score, embedding)
+      WHERE tenders.id = v.id AND tenders.embedding IS NULL RETURNING tenders.id`;
+    ids.push(...rows.map((r) => r.id));
   }
+  return ids;
+}
+
+/** Embeddings of tenders the team marked, by decision: they steer classify(). */
+export async function feedback() {
+  const out = { bid: [], not_relevant: [] };
+  for (const r of await sql`SELECT status, embedding::text AS v FROM tenders WHERE status IN ('bid', 'not_relevant') AND embedding IS NOT NULL`) {
+    out[r.status].push(Float32Array.from(JSON.parse(r.v)));
+  }
+  return out;
 }
 
 // Scrape runs. A background function stops after 15 minutes, so a run not

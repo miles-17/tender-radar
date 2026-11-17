@@ -4,7 +4,9 @@
 # The embedding model's runtime is loaded with createRequire, which the
 # function bundler can't trace: include it by hand, Linux x64 CPU build only
 # (the CUDA/TensorRT and other-OS binaries would push past the size limit).
-[functions.scrape-background]
+# Both background functions run the model: the scraper classifies, the
+# Telegram webhook embeds /search and /watch phrases.
+[functions."*-background"]
   included_files = [
     "node_modules/onnxruntime-node/**",
     "node_modules/onnxruntime-common/**",

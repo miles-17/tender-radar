@@ -53,6 +53,11 @@ export function parseDate(text) {
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+// Submission deadline in a bank notice's text: "Date of submission: on or before
+// 21st November, 2026", "Last date of submission 25/11/2026", "Deadline: ...".
+const CLOSING_RE = /(?:date of submission|submission (?:date|deadline)|last date(?: of (?:submission|receiving))?|deadline|closing(?: date)?)\W{0,4}(?:(?:is|on|or|before|by|time|and|date)\W+){0,5}([^]{0,40})/i;
+export const parseClosing = (text) => parseDate(CLOSING_RE.exec(text || '')?.[1]);
+
 // Words that make a link look like a tender/procurement notice.
 const TENDER_RE = /tender|rfp|rfq|rfi|request for|proposal|quotation|eoi|expression of interest|procure|enlist|bid|invitation|supply|purchase|vendor|software|system|solution|re-?tender|corrigendum|addendum|notice/i;
 const DOC_RE = /\.(?:pdf|docx?|xlsx?|zip|rar)(?:[?#]|$)/i;
@@ -99,6 +104,7 @@ export function extractItems(html, pageUrl, cfg = {}) {
       title: title.slice(0, 500),
       url,
       published: parseDate(context) || parseDate(title) || parseDate(url || ''),
+      closing: parseClosing(context) || parseClosing(title),
       context: clean(context).slice(0, 1000),
     });
   };
@@ -203,6 +209,7 @@ export function extractEgpRows(html) {
       title: title.slice(0, 500),
       url: `https://www.eprocure.gov.bd/resources/common/ViewTender.jsp?id=${id}&h=t`,
       published: parseDate(pub),
+      closing: parseDate(close),
       org,
       context: `${nature}. ${title}. ${org}. Closing ${clean(close)}`.slice(0, 1000),
     });
@@ -230,6 +237,7 @@ export function extractBppaRows(html, pageUrl, ministry) {
       title: title.slice(0, 500),
       url: new URL(href, pageUrl).href,
       published: parseDate(cellText($, td[3])),
+      closing: parseDate(cellText($, td[4])),
       org: [ministry, pe].filter(Boolean).join(' › '),
       context: `${title}. ${pe}. Closing ${cellText($, td[4])}`.slice(0, 1000),
     });

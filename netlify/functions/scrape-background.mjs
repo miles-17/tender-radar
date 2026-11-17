@@ -2,7 +2,8 @@
 // src/trigger.js, which has already marked the group as running.
 import { timingSafeEqual } from 'node:crypto';
 import { scrapeGroup } from '../../src/scraper.js';
-import { finishRun } from '../../src/db.js';
+import { finishRun, isRunning } from '../../src/db.js';
+import { sendDigest } from '../../src/notify.js';
 
 const sameKey = (a, b) => {
   const [x, y] = [Buffer.from(a), Buffer.from(b)];
@@ -21,4 +22,6 @@ export default async (req) => {
   } finally {
     await finishRun(String(group));
   }
+  // The last group to finish posts the Telegram digest of what the scrape found.
+  if (!(await isRunning())) await sendDigest().catch((err) => log('digest failed:', err));
 };

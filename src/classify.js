@@ -88,6 +88,9 @@ async function embed(texts) {
   return texts.map((_, i) => out.data.slice(i * dim, (i + 1) * dim));
 }
 
+/** Embedding of a search phrase (normalized, so inner product = cosine). */
+export const embedText = async (text) => (await embed([text]))[0];
+
 const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
 
 async function prototypes() {
@@ -99,11 +102,16 @@ async function prototypes() {
 }
 
 /**
+ * Team feedback (see db.feedback) joins the prototypes: tenders marked "We'll
+ * bid" count as software examples, "Not relevant" ones as other, so a tender
+ * much like one the team rejected scores low.
  * @param {{title: string}[]} items
+ * @param {{bid: Float32Array[], not_relevant: Float32Array[]}} [marked]
  * @returns {Promise<{category: string, score: number, vec: Float32Array}[]>}
  */
-export async function classify(items) {
-  const protos = await prototypes();
+export async function classify(items, marked = { bid: [], not_relevant: [] }) {
+  const base = await prototypes();
+  const protos = { ...base, software: [...base.software, ...marked.bid], other: [...base.other, ...marked.not_relevant] };
   const results = [];
   for (let i = 0; i < items.length; i += 32) {
     const batch = items.slice(i, i + 32);
