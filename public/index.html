@@ -52,6 +52,8 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 button:disabled { cursor: not-allowed; opacity: 0.55; color: var(--color-muted); border-style: dashed; transform: none; }
 select:hover, input:hover { border-color: var(--color-ink-2); }
 select { cursor: pointer; }
+/* The open list is drawn by the browser on its own white; give it the board's colours. */
+select option, select optgroup { background-color: var(--color-paper); color: var(--color-ink); }
 #theme { min-width: 40px; display: inline-grid; place-items: center; padding: var(--space-2xs); }
 #theme svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* The one filled control: a chalk-filled blob, like the filled circles on the reference board. */
