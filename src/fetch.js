@@ -2,6 +2,7 @@
 // Captcha / bot-check pages are reported as BlockedError, never solved.
 import { connect, rootCertificates } from 'node:tls';
 import { X509Certificate } from 'node:crypto';
+import { lookup as systemLookup, Resolver } from 'node:dns';
 import { fetch, Agent } from 'undici';
 import { extractItems, extractJsonItems, extractEgpRows, egpTotalPages, extractBppaRows, bppaMinistries } from './extract.js';
 
@@ -18,7 +19,23 @@ const CHALLENGE_RE = /security check required|what code is in the image|testing 
 // fetched cert is only a chain candidate: TLS still has to verify the whole
 // chain up to a trusted root, so nothing is trusted blindly.
 const CHAIN_ERRORS = new Set(['UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY']);
-const defaultAgent = new Agent({ connect: { timeout: 20_000 } });
+
+// Some government domains list a broken name server (eprocure.gov.bd names
+// "bcc-vm-ns2."), so a resolver that asks it fails. When the normal lookup
+// can't find a host, ask public resolvers before giving up.
+const publicDns = new Resolver({ timeout: 5_000, tries: 2 });
+publicDns.setServers(['8.8.8.8', '1.1.1.1']);
+function lookup(host, opts, cb) {
+  systemLookup(host, opts, (err, ...result) => {
+    if (!err || !['ENOTFOUND', 'EAI_AGAIN'].includes(err.code)) return cb(err, ...result);
+    publicDns.resolve4(host, (err4, addrs) => {
+      if (err4 || !addrs.length) return cb(err);
+      return opts.all ? cb(null, addrs.map((address) => ({ address, family: 4 }))) : cb(null, addrs[0], 4);
+    });
+  });
+}
+
+const defaultAgent = new Agent({ connect: { timeout: 20_000, lookup } });
 const chainAgents = new Map(); // hostname -> Agent trusting roots + that site's intermediate
 
 function issuerUrl(host) {
@@ -40,7 +57,7 @@ async function chainAgent(host) {
   const res = await fetch(aia, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) return null;
   const pem = new X509Certificate(Buffer.from(await res.arrayBuffer())).toString(); // DER or PEM in, PEM out
-  const agent = new Agent({ connect: { timeout: 20_000, ca: [...rootCertificates, pem] } });
+  const agent = new Agent({ connect: { timeout: 20_000, lookup, ca: [...rootCertificates, pem] } });
   chainAgents.set(host, agent);
   return agent;
 }
