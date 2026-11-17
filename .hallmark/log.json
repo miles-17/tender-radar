@@ -1,0 +1,31 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "custom",
+  "axes": "mid/handwritten/warm",
+  "signature": "software score as a chalk ring filled to its percentage",
+  "nav": "top bar, wordmark in a double chalk frame",
+  "footer": "none",
+  "hero": "none (app screen)",
+  "imagery": "none",
+  "photos": [],
+  "entry": "chalkboard dashboard",
+  "fingerprint": "app/list-rows/chalk",
+  "sections": [
+   "top bar",
+   "sources disclosure",
+   "section boards",
+   "filters",
+   "tender rows"
+  ],
+  "waived": [
+   "47c",
+   "49b"
+  ],
+  "prompt": "make the dashboard look like the chalkboard reference image, doodled writing, dark board",
+  "date": "2026-11-17"
+ }
+]

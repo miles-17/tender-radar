@@ -1,0 +1,55 @@
+:root {
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  /* App scale, ratio 1.2 from a 16px body; the wordmark has its own size. */
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
+  --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1.0625rem; --text-lead: 1rem;
+  --text-wordmark: 2.25rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --container: 1280px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+
+  /* Whiteboard: marker on a white board. The chalkboard below is the same system in chalk. */
+  --color-paper: oklch(97.5% 0.006 85); --color-paper-2: oklch(94.5% 0.008 85); --color-paper-3: oklch(91% 0.009 85);
+  --color-ink: oklch(25% 0.012 70); --color-ink-2: oklch(36% 0.012 70); --color-muted: oklch(47% 0.012 70);
+  --color-rule: oklch(72% 0.01 70);
+  --color-accent: oklch(54% 0.15 48); --color-accent-ink: oklch(98% 0.006 85); --color-focus: oklch(55% 0.19 48);
+  --color-success: oklch(47% 0.12 150); --color-warn: oklch(49% 0.11 75); --color-error: oklch(51% 0.18 27);
+  --font-display: "Shantell Sans", "Comic Neue", ui-rounded, system-ui, sans-serif;
+  --font-body: "Shantell Sans", "Comic Neue", ui-rounded, system-ui, sans-serif;
+  --font-outlier: "Gochi Hand", "Shantell Sans", ui-rounded, cursive;
+  /* Shantell Sans axes: informal (INFM) loosens the hand, bounce (BNCE) jogs the baseline. */
+  --hand-body: "INFM" 20, "BNCE" 0; --hand-loose: "INFM" 70, "BNCE" 30;
+
+  /* Hand-drawn box: unequal corner radii read as a line drawn freehand. */
+  --radius-card: 4px; --radius-pill: 999px; --rule-hair: 1px; --shadow-card: none;
+  --radius-sketch: 255px 14px 225px 14px / 14px 225px 14px 255px;
+  --radius-sketch-2: 14px 225px 14px 255px / 255px 14px 225px 14px;
+  --radius-field: 3px;
+  --chalk-line: 2px; --ring-stroke: 3;
+  --tracking-display: 0;
+  color-scheme: light;
+}
+
+/* Chalkboard: the charcoal board, chalk-white writing and peach chalk from the reference board. */
+:root[data-theme="dark"] {
+  --color-paper: oklch(27% 0.006 70); --color-paper-2: oklch(30.5% 0.007 70); --color-paper-3: oklch(34% 0.008 70);
+  --color-ink: oklch(94% 0.012 85); --color-ink-2: oklch(85% 0.012 85); --color-muted: oklch(74% 0.012 85);
+  --color-rule: oklch(55% 0.01 80);
+  --color-accent: oklch(82% 0.11 65); --color-accent-ink: oklch(25% 0.006 70); --color-focus: oklch(83% 0.15 62);
+  --color-success: oklch(85% 0.11 150); --color-warn: oklch(88% 0.12 95); --color-error: oklch(80% 0.11 18);
+  --hand-body: "INFM" 20, "BNCE" 0;
+  --chalk-line: 2.5px; --ring-stroke: 4.5;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-paper: oklch(27% 0.006 70); --color-paper-2: oklch(30.5% 0.007 70); --color-paper-3: oklch(34% 0.008 70);
+    --color-ink: oklch(94% 0.012 85); --color-ink-2: oklch(85% 0.012 85); --color-muted: oklch(74% 0.012 85);
+    --color-rule: oklch(55% 0.01 80);
+    --color-accent: oklch(82% 0.11 65); --color-accent-ink: oklch(25% 0.006 70); --color-focus: oklch(83% 0.15 62);
+    --color-success: oklch(85% 0.11 150); --color-warn: oklch(88% 0.12 95); --color-error: oklch(80% 0.11 18);
+    --chalk-line: 2.5px; --ring-stroke: 4.5;
+    color-scheme: dark;
+  }
+}
