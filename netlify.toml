@@ -1,0 +1,16 @@
+[build]
+  publish = "public"
+
+# The embedding model's runtime is loaded with createRequire, which the
+# function bundler can't trace: include it by hand, Linux x64 CPU build only
+# (the CUDA/TensorRT and other-OS binaries would push past the size limit).
+[functions.scrape-background]
+  included_files = [
+    "node_modules/onnxruntime-node/**",
+    "node_modules/onnxruntime-common/**",
+    "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**",
+    "!node_modules/onnxruntime-node/bin/napi-v6/win32/**",
+    "!node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**",
+    "!node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime_providers_cuda.so",
+    "!node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime_providers_tensorrt.so",
+  ]

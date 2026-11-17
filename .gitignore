@@ -14,3 +14,6 @@ Embedded model Understand.txt
 *.log
 .DS_Store
 .vscode/
+
+# Netlify CLI build output and local settings
+.netlify/

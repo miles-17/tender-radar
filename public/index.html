@@ -162,6 +162,28 @@ function syncControls() {
   $('#range').hidden = state.days !== 'range';
 }
 
+// API calls. Signed out (password cookie expired): reload to show the sign-in page.
+async function api(url, init) {
+  const r = await fetch(url, init);
+  if (r.status === 401) { location.reload(); throw new Error('sign in required'); }
+  return r;
+}
+const getJson = (url) => api(url).then((r) => r.json());
+
+// Search by meaning: the query is embedded here in the browser with the same
+// model the scraper uses (~34 MB, downloaded once, then cached by the browser).
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2';
+let embedder;
+async function queryVector(text) {
+  embedder ??= import(MODEL_URL).then(({ pipeline }) => pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', { dtype: 'q8' }));
+  // bge models expect this prefix on short retrieval queries.
+  const out = await (await embedder)(`Represent this sentence for searching relevant passages: ${text}`, { pooling: 'mean', normalize: true });
+  const bytes = new Uint8Array(Float32Array.from(out.data).buffer);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
 let reqId = 0;
 async function loadTenders() {
   try { localStorage.setItem('tr-filters', JSON.stringify(state)); } catch {}
@@ -173,11 +195,20 @@ async function loadTenders() {
   } else p.set('days', state.days);
   if (state.section === 'bank' && state.site) p.set('site', state.site);
   if (state.section === 'gov' && state.org) p.set('org', state.org);
-  if (state.q) p.set('q', state.q);
+  let byMeaning = false;
+  if (state.q) {
+    p.set('q', state.q);
+    $('#count').textContent = embedder ? 'Loading…' : 'Loading search model…';
+    try { p.set('qv', await queryVector(state.q)); byMeaning = true; } catch (e) {
+      embedder = null; // retry next time
+      console.warn('search model unavailable, matching words in titles instead', e);
+    }
+    if (id !== reqId) return;
+  }
   $('#count').textContent = 'Loading…';
-  const rows = await fetch('/api/tenders?' + p).then((r) => r.json());
+  const rows = await getJson('/api/tenders?' + p);
   if (id !== reqId) return;
-  $('#count').textContent = `${rows.length}${rows.length === 500 ? '+' : ''} tender${rows.length === 1 ? '' : 's'} · ${state.q ? 'ranked by meaning' : 'most software-relevant first'}`;
+  $('#count').textContent = `${rows.length}${rows.length === 500 ? '+' : ''} tender${rows.length === 1 ? '' : 's'} · ${byMeaning ? 'ranked by meaning' : state.q ? 'titles containing your words' : 'most software-relevant first'}`;
   const dayAgo = Date.now() - 3 * 86400000;
   $('#list').innerHTML = rows.length ? rows.map((r) => `
     <article class="item">
@@ -193,7 +224,7 @@ async function loadTenders() {
 }
 
 async function loadSites() {
-  const { running, sites } = await fetch('/api/sites').then((r) => r.json());
+  const { running, sites } = await getJson('/api/sites');
   const last = sites.map((s) => s.last_run).filter(Boolean).sort().pop();
   $('#runinfo').textContent = running ? 'Scraping now…' : `Last scrape ${ago(last)}`;
   $('#scrape').disabled = running;
@@ -224,7 +255,7 @@ async function loadSites() {
 
 // Ministry dropdown: each ministry, then its divisions, from the tenders we hold.
 async function loadOrgs() {
-  const tree = await fetch('/api/orgs').then((r) => r.json());
+  const tree = await getJson('/api/orgs');
   const sel = $('#org');
   const key = JSON.stringify(tree);
   if (sel.dataset.key === key) return;
@@ -243,7 +274,7 @@ async function loadOrgs() {
 }
 
 const postJson = (url, method, body = {}) =>
-  fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  api(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
 $('#addSite').addEventListener('submit', async (e) => {
   e.preventDefault();

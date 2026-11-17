@@ -1,31 +1,25 @@
-// Polite HTTP fetching via curl: browser-like UA, timeout, one retry, captcha
-// detection. Captcha / bot-check pages are reported as BlockedError, never solved.
-// curl (not Node fetch) because some bank WAFs challenge Node's TLS client.
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+// Polite HTTP fetching: browser-like UA, timeout, one retry, captcha detection.
+// Captcha / bot-check pages are reported as BlockedError, never solved.
 import { connect, rootCertificates } from 'node:tls';
 import { X509Certificate } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fetch, Agent } from 'undici';
 import { extractItems, extractJsonItems, extractEgpRows, egpTotalPages, extractBppaRows, bppaMinistries } from './extract.js';
 
-const run = promisify(execFile);
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
-const TIMEOUT_S = 45;
+const TIMEOUT_MS = 45_000;
 
 export class BlockedError extends Error {}
 
 // Phrases only bot-check pages contain (a bare "captcha" also matches normal forms).
 const CHALLENGE_RE = /security check required|what code is in the image|testing whether you are a human|<title>just a moment\.\.\.<\/title>|cf-chl-|incapsula incident|http-equiv="CacheControl" content="no-cache"\/>\s*<script[^>]*>\s*function SHA1\(/i;
 
-// Some bank servers don't send their intermediate certificate (curl error 60).
-// Browsers fetch it from the URL in the site certificate (AIA "CA Issuers");
-// do the same. The fetched cert is only a chain candidate: curl still has to
-// verify the whole chain up to a trusted root, so nothing is trusted blindly.
-const CA_BUNDLE = join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'ca-bundle.pem');
-const intermediates = new Map(); // AIA URL -> PEM
-const needsBundle = new Set(); // hostnames
+// Some bank servers don't send their intermediate certificate. Browsers fetch it
+// from the URL in the site certificate (AIA "CA Issuers"); do the same. The
+// fetched cert is only a chain candidate: TLS still has to verify the whole
+// chain up to a trusted root, so nothing is trusted blindly.
+const CHAIN_ERRORS = new Set(['UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY']);
+const defaultAgent = new Agent({ connect: { timeout: 20_000 } });
+const chainAgents = new Map(); // hostname -> Agent trusting roots + that site's intermediate
 
 function issuerUrl(host) {
   return new Promise((resolve, reject) => {
@@ -40,54 +34,51 @@ function issuerUrl(host) {
   });
 }
 
-async function addIntermediate(url) {
-  const host = new URL(url).hostname;
+async function chainAgent(host) {
   const aia = await issuerUrl(host).catch(() => null);
-  if (!aia || !/^http:\/\//.test(aia)) return false;
-  if (!intermediates.has(aia)) {
-    const { stdout } = await run('curl', ['-sS', '-L', '-m', '30', '--', aia], { encoding: 'buffer', maxBuffer: 1 << 20 });
-    intermediates.set(aia, new X509Certificate(stdout).toString()); // DER or PEM in, PEM out
-    mkdirSync(dirname(CA_BUNDLE), { recursive: true });
-    writeFileSync(CA_BUNDLE, [...rootCertificates, ...intermediates.values()].join('\n'));
-  }
-  needsBundle.add(host);
-  return true;
+  if (!aia || !/^http:\/\//.test(aia)) return null;
+  const res = await fetch(aia, { signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) return null;
+  const pem = new X509Certificate(Buffer.from(await res.arrayBuffer())).toString(); // DER or PEM in, PEM out
+  const agent = new Agent({ connect: { timeout: 20_000, ca: [...rootCertificates, pem] } });
+  chainAgents.set(host, agent);
+  return agent;
 }
 
-async function curl(url, opts = {}) {
+async function requestOnce(url, { method = 'GET', body, headers = {} } = {}, agent) {
+  const res = await fetch(url, {
+    method,
+    body: body == null ? undefined : String(body),
+    headers: { 'user-agent': UA, accept: 'text/html,application/json;q=0.9,*/*;q=0.8', ...headers },
+    dispatcher: agent,
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  return { status: res.status, text: await res.text() };
+}
+
+async function request(url, opts = {}) {
   const host = new URL(url).hostname;
   try {
-    return await curlOnce(url, opts, needsBundle.has(host));
+    return await requestOnce(url, opts, chainAgents.get(host) ?? defaultAgent);
   } catch (err) {
-    if (err.code !== 60 || needsBundle.has(host) || !(await addIntermediate(url))) throw err;
-    return curlOnce(url, opts, true);
+    if (!CHAIN_ERRORS.has(err.cause?.code) || chainAgents.has(host)) throw err;
+    const agent = await chainAgent(host);
+    if (!agent) throw err;
+    return requestOnce(url, opts, agent);
   }
-}
-
-async function curlOnce(url, { method = 'GET', body, headers = {} } = {}, bundle = false) {
-  const args = ['-sS', '-L', '--compressed', '-m', String(TIMEOUT_S), '-A', UA,
-    '-H', 'accept: text/html,application/json;q=0.9,*/*;q=0.8', '-w', '\n%{http_code}'];
-  for (const [k, v] of Object.entries(headers)) args.push('-H', `${k}: ${v}`);
-  if (method !== 'GET') args.push('-X', method);
-  if (body) args.push('--data', String(body));
-  if (bundle) args.push('--cacert', CA_BUNDLE);
-  args.push('--', url);
-  const { stdout } = await run('curl', args, { maxBuffer: 64 * 1024 * 1024 });
-  const cut = stdout.lastIndexOf('\n');
-  return { status: Number(stdout.slice(cut + 1)), text: stdout.slice(0, cut) };
 }
 
 async function get(url, init = {}) {
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const { status, text: body } = await curl(url, init);
+      const { status, text: body } = await request(url, init);
       if (CHALLENGE_RE.test(body)) throw new BlockedError('site shows a captcha / bot check');
       if (status < 200 || status >= 300) throw new Error(`HTTP ${status}`);
       return body;
     } catch (err) {
       if (err instanceof BlockedError) throw err;
-      lastErr = err;
+      lastErr = err.cause?.code ? new Error(`${err.message}: ${err.cause.code}`) : err;
       await new Promise((r) => setTimeout(r, 5_000));
     }
   }

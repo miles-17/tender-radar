@@ -1,148 +1,120 @@
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+// Postgres (Supabase) access. Schema: db/schema.sql, created by scripts/setup-db.mjs.
+import postgres from 'postgres';
 import { createHash } from 'node:crypto';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DB_PATH = process.env.TENDER_DB || join(ROOT, 'data', 'tenders.db');
-mkdirSync(dirname(DB_PATH), { recursive: true });
+if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+// Supabase's transaction pooler doesn't support prepared statements.
+export const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 4, idle_timeout: 20 });
 
-export const db = new DatabaseSync(DB_PATH);
-db.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA busy_timeout = 5000;
-  CREATE TABLE IF NOT EXISTS tenders (
-    id          TEXT PRIMARY KEY,          -- sha1(site|url|title)
-    site_id     TEXT NOT NULL,
-    title       TEXT NOT NULL,
-    url         TEXT,
-    published   TEXT,                      -- YYYY-MM-DD when found on page
-    context     TEXT,
-    first_seen  TEXT NOT NULL,
-    last_seen   TEXT NOT NULL,
-    category    TEXT,                      -- software | it | other
-    score       REAL,                      -- software relevance, 0..1
-    embedding   BLOB                       -- Float32Array, 384 dims
-  );
-  CREATE INDEX IF NOT EXISTS tenders_site ON tenders(site_id);
-  CREATE INDEX IF NOT EXISTS tenders_cat ON tenders(category, score);
-  CREATE TABLE IF NOT EXISTS site_status (
-    site_id     TEXT PRIMARY KEY,
-    last_run    TEXT,
-    ok          INTEGER,
-    blocked     INTEGER,
-    found       INTEGER,
-    new_items   INTEGER,
-    error       TEXT
-  );
-  CREATE TABLE IF NOT EXISTS sites (
-    id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    url         TEXT NOT NULL UNIQUE,
-    kind        TEXT NOT NULL DEFAULT 'auto', -- html | json | rupali | auto
-    scope       TEXT,
-    added       TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
-  -- Notices that were already on a bank's page before the start date: never stored.
-  CREATE TABLE IF NOT EXISTS ignored (id TEXT PRIMARY KEY, site_id TEXT NOT NULL);
-`);
-const hasColumn = (table, col) => !!db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(col);
-// baselined = 1 once a site's first successful scrape has recorded what was already there.
-if (!hasColumn('sites', 'baselined')) db.exec('ALTER TABLE sites ADD COLUMN baselined INTEGER NOT NULL DEFAULT 0');
-// section: 'bank' (bank tender pages) or 'gov' (ministries & departments: e-GP, BPPA).
-if (!hasColumn('sites', 'section')) db.exec("ALTER TABLE sites ADD COLUMN section TEXT NOT NULL DEFAULT 'bank'");
-// org: "Ministry, Division, Organisation, ..." for government tenders.
-if (!hasColumn('tenders', 'org')) db.exec('ALTER TABLE tenders ADD COLUMN org TEXT');
-// Only tenders from this date on are kept (set on first run, Asia/Dhaka-local date).
-db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('since', date('now', 'localtime'))").run();
-export const SINCE = db.prepare("SELECT value FROM settings WHERE key = 'since'").get().value;
+/** pgvector literal for a Float32Array. */
+export const vectorLiteral = (vec) => `[${Array.from(vec).join(',')}]`;
 
-// First start: seed the editable site list from the built-in bank list.
-if (!db.prepare('SELECT COUNT(*) n FROM sites').get().n) {
-  const { SITES } = await import('./sites.js');
-  const seed = db.prepare('INSERT INTO sites (id, name, url, kind, scope, section, added) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  const now = new Date().toISOString();
-  for (const s of SITES) seed.run(s.id, s.name, s.url, s.kind, s.scope ?? null, s.section ?? 'bank', now);
-}
+// Only tenders from this date on are kept (set once, when the database was set up).
+let since;
+export const getSince = async () => (since ??= (await sql`SELECT value FROM settings WHERE key = 'since'`)[0].value);
 
-export const listSites = () => db.prepare('SELECT * FROM sites ORDER BY added, rowid').all();
-export const getSite = (id) => db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+export const listSites = () => sql`SELECT * FROM sites ORDER BY pos`;
+export const getSite = async (id) => (await sql`SELECT * FROM sites WHERE id = ${id}`)[0];
 
-export function addSite(name, url) {
+export async function addSite(name, url) {
   const host = new URL(url).hostname.replace(/^www\./, '');
   const id = `${host.split('.')[0].replace(/[^a-z0-9]/gi, '').toLowerCase() || 'site'}-${createHash('sha1').update(url).digest('hex').slice(0, 6)}`;
-  db.prepare("INSERT INTO sites (id, name, url, kind, added) VALUES (?, ?, ?, 'auto', ?)")
-    .run(id, name || host, url, new Date().toISOString());
-  return getSite(id);
+  const [site] = await sql`INSERT INTO sites (id, name, url, kind, added)
+    VALUES (${id}, ${name || host}, ${url}, 'auto', ${new Date().toISOString()}) RETURNING *`;
+  return site;
 }
 
 /** Remove a site and everything scraped from it. */
 export function removeSite(id) {
-  db.exec('BEGIN');
-  try {
-    db.prepare('DELETE FROM tenders WHERE site_id = ?').run(id);
-    db.prepare('DELETE FROM site_status WHERE site_id = ?').run(id);
-    db.prepare('DELETE FROM ignored WHERE site_id = ?').run(id);
-    const { changes } = db.prepare('DELETE FROM sites WHERE id = ?').run(id);
-    db.exec('COMMIT');
-    return changes > 0;
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
+  return sql.begin(async (tx) => {
+    await tx`DELETE FROM tenders WHERE site_id = ${id}`;
+    await tx`DELETE FROM site_status WHERE site_id = ${id}`;
+    await tx`DELETE FROM ignored WHERE site_id = ${id}`;
+    return (await tx`DELETE FROM sites WHERE id = ${id}`).count > 0;
+  });
 }
 
 export const tenderId = (siteId, it) =>
   createHash('sha1').update(`${siteId}|${it.url || ''}|${it.title.toLowerCase()}`).digest('hex');
 
-const insert = db.prepare(`
-  INSERT INTO tenders (id, site_id, title, url, published, context, org, first_seen, last_seen)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(id) DO UPDATE SET last_seen = excluded.last_seen,
-    published = COALESCE(tenders.published, excluded.published),
-    org = COALESCE(excluded.org, tenders.org)`);
-const exists = db.prepare('SELECT 1 FROM tenders WHERE id = ?');
-const isIgnored = db.prepare('SELECT 1 FROM ignored WHERE id = ?');
-const ignore = db.prepare('INSERT OR IGNORE INTO ignored (id, site_id) VALUES (?, ?)');
+const CHUNK = 1000; // rows per INSERT, well under Postgres' 65k parameter limit
 
 /**
  * Upsert scraped items; returns ids of items not seen before.
- * Old notices are recorded in `ignored` instead: dated before SINCE, or undated
- * and already on the page at the site's first (baseline) scrape.
+ * Old notices are recorded in `ignored` instead: dated before the start date, or
+ * undated and already on the page at the site's first (baseline) scrape.
  */
-export function saveItems(siteId, items, baseline = false) {
+export async function saveItems(siteId, items, baseline = false) {
+  const SINCE = await getSince();
   const now = new Date().toISOString();
-  const fresh = [];
-  db.exec('BEGIN');
-  try {
-    for (const it of items) {
-      const id = tenderId(siteId, it);
-      if (isIgnored.get(id)) continue;
-      const known = exists.get(id);
-      if (!known && (it.published ? it.published < SINCE : baseline)) { ignore.run(id, siteId); continue; }
-      if (!known) fresh.push(id);
-      insert.run(id, siteId, it.title, it.url, it.published, it.context, it.org ?? null, now, now);
+  return sql.begin(async (tx) => {
+    const ids = items.map((it) => tenderId(siteId, it));
+    const ignored = new Set((await tx`SELECT id FROM ignored WHERE id = ANY(${ids})`).map((r) => r.id));
+    const known = new Set((await tx`SELECT id FROM tenders WHERE id = ANY(${ids})`).map((r) => r.id));
+    const fresh = [];
+    const rows = new Map(); // id -> row; repeats on one page merge like successive upserts
+    const skip = [];
+    items.forEach((it, i) => {
+      const id = ids[i];
+      if (ignored.has(id)) return;
+      if (!known.has(id) && (it.published ? it.published < SINCE : baseline)) {
+        ignored.add(id);
+        skip.push({ id, site_id: siteId });
+        return;
+      }
+      if (!known.has(id)) { known.add(id); fresh.push(id); }
+      const prev = rows.get(id);
+      rows.set(id, {
+        id, site_id: siteId,
+        title: prev?.title ?? it.title, url: prev?.url ?? it.url ?? null, context: prev?.context ?? it.context ?? null,
+        published: prev?.published ?? it.published ?? null,
+        org: it.org ?? prev?.org ?? null,
+        first_seen: now, last_seen: now,
+      });
+    });
+    const all = [...rows.values()];
+    for (let i = 0; i < all.length; i += CHUNK) {
+      await tx`INSERT INTO tenders ${tx(all.slice(i, i + CHUNK))}
+        ON CONFLICT (id) DO UPDATE SET last_seen = excluded.last_seen,
+          published = COALESCE(tenders.published, excluded.published),
+          org = COALESCE(excluded.org, tenders.org)`;
     }
-    if (baseline && items.length) db.prepare('UPDATE sites SET baselined = 1 WHERE id = ?').run(siteId);
-    db.exec('COMMIT');
-  } catch (e) {
-    db.exec('ROLLBACK');
-    throw e;
-  }
-  return fresh;
+    for (let i = 0; i < skip.length; i += CHUNK) {
+      await tx`INSERT INTO ignored ${tx(skip.slice(i, i + CHUNK))} ON CONFLICT DO NOTHING`;
+    }
+    if (baseline && items.length) await tx`UPDATE sites SET baselined = true WHERE id = ${siteId}`;
+    return fresh;
+  });
 }
 
-const status = db.prepare(`
+export const setStatus = (siteId, s) => sql`
   INSERT INTO site_status (site_id, last_run, ok, blocked, found, new_items, error)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(site_id) DO UPDATE SET last_run = excluded.last_run, ok = excluded.ok,
-    blocked = excluded.blocked, found = excluded.found, new_items = excluded.new_items, error = excluded.error`);
-export const setStatus = (siteId, s) =>
-  status.run(siteId, new Date().toISOString(), s.ok ? 1 : 0, s.blocked ? 1 : 0, s.found ?? 0, s.newItems ?? 0, s.error ?? null);
+  VALUES (${siteId}, ${new Date().toISOString()}, ${!!s.ok}, ${!!s.blocked}, ${s.found ?? 0}, ${s.newItems ?? 0}, ${s.error ?? null})
+  ON CONFLICT (site_id) DO UPDATE SET last_run = excluded.last_run, ok = excluded.ok,
+    blocked = excluded.blocked, found = excluded.found, new_items = excluded.new_items, error = excluded.error`;
 
-export const unclassified = () => db.prepare('SELECT id, title, context FROM tenders WHERE embedding IS NULL').all();
-const setClass = db.prepare('UPDATE tenders SET category = ?, score = ?, embedding = ? WHERE id = ?');
-export const saveClass = (id, category, score, vec) =>
-  setClass.run(category, score, Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength), id);
+export const unclassified = () => sql`SELECT id, title, context FROM tenders WHERE embedding IS NULL`;
+
+/** @param {{id: string, category: string, score: number, vec: Float32Array}[]} results */
+export async function saveClass(results) {
+  for (let i = 0; i < results.length; i += 200) {
+    const values = results.slice(i, i + 200).map((r) => [r.id, r.category, String(r.score), vectorLiteral(r.vec)]);
+    await sql`UPDATE tenders SET category = v.category, score = v.score::real, embedding = v.embedding::vector
+      FROM (VALUES ${sql(values)}) AS v (id, category, score, embedding) WHERE tenders.id = v.id`;
+  }
+}
+
+// Scrape runs. A background function stops after 15 minutes, so a run not
+// marked finished within 16 minutes has died and no longer counts as running.
+
+/** Mark a group as running; false if it already is. */
+export async function claimRun(group) {
+  const rows = await sql`INSERT INTO scrape_runs (grp, started) VALUES (${group}, now())
+    ON CONFLICT (grp) DO UPDATE SET started = now(), finished = NULL
+    WHERE scrape_runs.finished IS NOT NULL OR scrape_runs.started < now() - interval '16 minutes'
+    RETURNING grp`;
+  return rows.length > 0;
+}
+export const finishRun = (group) => sql`UPDATE scrape_runs SET finished = now() WHERE grp = ${group}`;
+export const isRunning = async () =>
+  (await sql`SELECT 1 FROM scrape_runs WHERE finished IS NULL AND started > now() - interval '16 minutes' LIMIT 1`).length > 0;
