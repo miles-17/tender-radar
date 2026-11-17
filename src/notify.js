@@ -2,7 +2,7 @@
 // each scrape, /watch alerts, site problems, deadline reminders and the
 // weekly summary. All do nothing until TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set.
 import { sql } from './db.js';
-import { enabled, send, sendTenders, esc, institution, dhakaDate, fmtDay, TENDER_COLS } from './telegram.js';
+import { enabled, send, sendTenders, esc, institution, dhakaDate, fmtDay, byBanksFirst, TENDER_COLS } from './telegram.js';
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const setting = async (key) => (await sql`SELECT value FROM settings WHERE key = ${key}`)[0]?.value;
@@ -99,7 +99,8 @@ export async function sendWeekly() {
     WHERE t.status = 'bid' AND (t.closing IS NULL OR t.closing >= ${today}) ORDER BY t.closing NULLS LAST`;
   const broken = await sql`SELECT s.name FROM site_status st JOIN sites s ON s.id = st.site_id WHERE NOT st.ok ORDER BY s.pos`;
 
-  const counts = [...Map.groupBy(fresh, institution)].map(([k, v]) => [k, v.length]).sort((a, b) => b[1] - a[1]);
+  const bank = new Set(fresh.filter((r) => r.section !== 'gov').map(institution));
+  const counts = [...Map.groupBy(fresh, institution)].map(([k, v]) => [k, v.length]).sort((a, b) => byBanksFirst(bank, a, b));
   const link = (r) => (r.url ? `<a href="${esc(r.url)}">${esc(r.title)}</a>` : esc(r.title));
   const parts = [`📋 <b>Tender Radar: the week</b>\n${plural(fresh.length, 'new software tender')} from ${plural(counts.length, 'institution')}`];
   if (counts.length) parts.push(`<b>Most tenders</b>\n${counts.slice(0, 5).map(([k, n]) => `• ${esc(k)}: ${n}`).join('\n')}`);

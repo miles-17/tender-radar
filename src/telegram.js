@@ -56,8 +56,15 @@ export const keyboardTenders = (markup) =>
   (markup?.inline_keyboard || []).map((row) => row[0]?.callback_data?.split(':')).filter((p) => p?.length === 3).map(([, n, id]) => [Number(n), id]);
 
 /**
+ * Order for [institution, count] pairs: banks before government institutions,
+ * then most tenders first, then by name. `bank` holds the banks' names.
+ */
+export const byBanksFirst = (bank, a, b) =>
+  (bank.has(b[0]) - bank.has(a[0])) || b[1] - a[1] || a[0].localeCompare(b[0]);
+
+/**
  * Messages listing tenders, each with its buttons.
- * group: under one heading per institution (most tenders first), as in the digest;
+ * group: under one heading per institution (banks first, then most tenders first), as in the digest;
  * otherwise each line names its institution.
  * @returns {{text: string, reply_markup: object}[]}
  */
@@ -66,7 +73,8 @@ export function tenderMessages(rows, head, { group = false } = {}) {
   const counts = new Map();
   if (group) {
     for (const r of rows) counts.set(institution(r), (counts.get(institution(r)) || 0) + 1);
-    const rank = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+    const bank = new Set(rows.filter((r) => r.section !== 'gov').map(institution));
+    const rank = [...counts].sort((a, b) => byBanksFirst(bank, a, b)).map(([k]) => k);
     list = [...rows].sort((a, b) => rank.indexOf(institution(a)) - rank.indexOf(institution(b)));
   }
   const messages = [];

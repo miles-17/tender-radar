@@ -88,8 +88,8 @@ under **Logs → Functions** in the Netlify dashboard.
 The bot serves one group (`TELEGRAM_CHAT_ID`) and ignores every other chat. It posts:
 
 - **Digest**, when a scrape finishes: software tenders first seen since the last digest,
-  grouped by institution (the bank, or the ministry for government tenders), each linking to
-  its notice. Nothing when there are none.
+  grouped by institution (the bank, or the ministry for government tenders), banks first, each
+  linking to its notice. Nothing when there are none.
 - **Watch alerts**, when a scrape finds a tender matching a `/watch` phrase (by meaning, the
   same measure as the dashboard search, at a stricter 0.7).
 - **Site problems**, when a site fails 3 scrapes in a row, and when it works again.
