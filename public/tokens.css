@@ -1,13 +1,12 @@
 :root {
-  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-2xl: 64px; --space-3xl: 96px;
   /* App scale, ratio 1.2 from a 16px body; the wordmark has its own size. */
-  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
-  --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1.0625rem; --text-lead: 1rem;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-title: 1.0625rem;
   --text-wordmark: 2.25rem;
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
-  --container: 1280px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
-  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 120ms; --dur-short: 220ms;
+  --container: 1280px; --gutter: 64px; --gap-columns: 32px;
+  --z-sticky-nav: 300;
 
   /* Whiteboard: marker on a white board. The chalkboard below is the same system in chalk. */
   --color-paper: oklch(97.5% 0.006 85); --color-paper-2: oklch(94.5% 0.008 85); --color-paper-3: oklch(91% 0.009 85);
@@ -22,12 +21,11 @@
   --hand-body: "INFM" 20, "BNCE" 0; --hand-loose: "INFM" 70, "BNCE" 30;
 
   /* Hand-drawn box: unequal corner radii read as a line drawn freehand. */
-  --radius-card: 4px; --radius-pill: 999px; --rule-hair: 1px; --shadow-card: none;
+  --radius-card: 4px;
   --radius-sketch: 255px 14px 225px 14px / 14px 225px 14px 255px;
   --radius-sketch-2: 14px 225px 14px 255px / 255px 14px 225px 14px;
   --radius-field: 3px;
   --chalk-line: 2px; --ring-stroke: 3;
-  --tracking-display: 0;
   color-scheme: light;
 }
 

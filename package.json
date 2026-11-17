@@ -7,8 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "setup-db": "node scripts/setup-db.mjs",
-    "scrape": "node scripts/scrape.mjs"
+    "setup-db": "node scripts/setup-db.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.2",

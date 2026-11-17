@@ -11,7 +11,7 @@ export const vectorLiteral = (vec) => `[${Array.from(vec).join(',')}]`;
 
 // Only tenders from this date on are kept (set once, when the database was set up).
 let since;
-export const getSince = async () => (since ??= (await sql`SELECT value FROM settings WHERE key = 'since'`)[0].value);
+const getSince = async () => (since ??= (await sql`SELECT value FROM settings WHERE key = 'since'`)[0].value);
 
 export const listSites = () => sql`SELECT * FROM sites ORDER BY pos`;
 export const getSite = async (id) => (await sql`SELECT * FROM sites WHERE id = ${id}`)[0];

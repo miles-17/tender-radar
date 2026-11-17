@@ -23,7 +23,7 @@ hosted on Netlify.
 
 A scrape is split into groups so each fits in one 15-minute background function: all bank
 pages (fetched 6 at a time), e-GP, and BPPA. A site added on the dashboard is scraped on its
-own straight away. The dashboard shows "Scraping now…" while any group is running.
+own straight away (its group is its id). The dashboard shows "Scraping now…" while any group is running.
 
 Search by meaning runs the same model in the browser: the first search downloads it (~34 MB,
 then cached by the browser). If it can't load, the search matches words in titles instead.
@@ -78,18 +78,11 @@ Scrapes run at 00:00 and 12:00 UTC (6 am and 6 pm in Dhaka). That keeps the site
 Netlify Free plan's monthly credits; scraping more often needs a paid plan. Function logs are
 under **Logs → Functions** in the Netlify dashboard.
 
-Set up an empty database (creates the tables, seeds the bank list, start date = today):
+Set up an empty database (creates the tables, seeds the bank list, start date = today; safe to
+re-run, it keeps existing settings and sites):
 
 ```bash
 DATABASE_URL=... npm run setup-db
-DATABASE_URL=... npm run setup-db -- path/to/tenders.db   # or copy an old SQLite database
-```
-
-Scrape from your own computer against the same database (for testing):
-
-```bash
-DATABASE_URL=... npm run scrape            # all groups
-DATABASE_URL=... npm run scrape -- banks   # one group: banks, egp, bppa
 ```
 
 ## Adding or removing a site

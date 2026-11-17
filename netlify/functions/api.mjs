@@ -81,7 +81,7 @@ async function sites() {
   const counts = Object.fromEntries((await sql`
     SELECT site_id, COUNT(*)::int n, (COUNT(*) FILTER (WHERE category = 'software'))::int sw
     FROM tenders GROUP BY site_id`).map((r) => [r.site_id, r]));
-  return (await listSites()).map(({ pos, ...s }) => ({ ...s, ...st[s.id], total: counts[s.id]?.n || 0, software: counts[s.id]?.sw || 0 }));
+  return (await listSites()).map((s) => ({ ...s, ...st[s.id], total: counts[s.id]?.n || 0, software: counts[s.id]?.sw || 0 }));
 }
 
 // Writes require a JSON body: browsers can't send that cross-site without a
@@ -102,9 +102,8 @@ async function handleAddSite(req) {
   if ((await sql`SELECT 1 FROM sites WHERE url = ${parsed.href}`).length) return json({ error: 'That link is already in the list' }, 409);
   const site = await addSite(String(name || '').trim().slice(0, 100), parsed.href);
   console.log(`site added: ${site.id} ${site.url}`);
-  await triggerScrape([`site:${site.id}`]); // scrape it right away
-  const { pos, ...rest } = site;
-  return json(rest, 201);
+  await triggerScrape([site.id]); // scrape it right away
+  return json(site, 201);
 }
 
 export default async (req) => {
