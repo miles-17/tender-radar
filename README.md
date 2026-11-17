@@ -17,6 +17,7 @@ hosted on Netlify.
 | Scrape groups and scrape run | `src/groups.js`, `src/scraper.js` |
 | Dashboard API (`/api/*`) | `netlify/functions/api.mjs` |
 | Scrape every 12 hours | `netlify/functions/scrape-scheduled.mjs` |
+| Telegram digest of new software tenders | `netlify/functions/telegram-digest.mjs` |
 | Scrape one group (background function, up to 15 minutes) | `netlify/functions/scrape-background.mjs` |
 | Password gate | `netlify/edge-functions/gate.js` |
 | Dashboard | `public/index.html` |
@@ -73,10 +74,17 @@ Netlify (site, functions, password gate) and Supabase (database). Netlify enviro
 | `DATABASE_URL` | Supabase **transaction pooler** connection string (port 6543) |
 | `SITE_PASSWORD` | The shared dashboard password. Changing it signs everyone out. |
 | `SCRAPE_KEY` | Long random string; lets the API and schedule start background scrapes |
+| `TELEGRAM_BOT_TOKEN` | The bot's token from @BotFather (optional: no digest without it) |
+| `TELEGRAM_CHAT_ID` | The Telegram group the digest goes to (a negative number) |
 
 Scrapes run at 00:00 and 12:00 UTC (6 am and 6 pm in Dhaka). That keeps the site within the
 Netlify Free plan's monthly credits; scraping more often needs a paid plan. Function logs are
 under **Logs → Functions** in the Netlify dashboard.
+
+The Telegram digest runs 30 minutes after each scrape (6:30 am and 6:30 pm in Dhaka). It
+lists the software tenders first seen since the last digest, grouped by institution (the bank,
+or the ministry for government tenders), each title linking to its notice, and sends nothing
+when there are none. The bot must be a member of the group.
 
 Set up an empty database (creates the tables, seeds the bank list, start date = today; safe to
 re-run, it keeps existing settings and sites):
