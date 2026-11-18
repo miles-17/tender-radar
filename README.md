@@ -103,7 +103,7 @@ Every tender it lists has three buttons: **We'll bid**, **Not relevant** and **T
 tenders last. Marked tenders also teach the classifier: a new tender much like one marked
 "Not relevant" is scored as not software, and one like a "We'll bid" tender as software.
 
-Commands: `/latest`, `/search words`, `/bank name`, `/watch phrase`, `/unwatch phrase`,
+Commands: `/latest` (banks first), `/search words`, `/bank name`, `/watch phrase`, `/unwatch phrase`,
 `/watches`, `/scrape`, `/help`.
 
 Set up (once): add the bot to the group, set the two variables above, deploy, then point the

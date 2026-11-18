@@ -11,7 +11,7 @@ import { call, send, sendTenders, keyboard, keyboardTenders, chatId, enabled, we
 
 const HELP = `<b>Scrappy</b> posts new software tenders here after each scrape (6 am and 6 pm), with buttons to mark each one.
 
-/latest: the 10 newest software tenders
+/latest: the 10 newest software tenders, banks first
 /search <i>words</i>: the 5 best matches, by meaning
 /bank <i>name</i>: an institution's recent software tenders
 /watch <i>phrase</i>: post matching tenders as soon as they're found
@@ -35,9 +35,9 @@ const COMMANDS = {
 
   async latest(_, reply) {
     const rows = await sql`SELECT ${sql.unsafe(TENDER_COLS)} FROM tenders t JOIN sites s ON s.id = t.site_id
-      WHERE t.category = 'software' AND t.status IS DISTINCT FROM 'not_relevant' ORDER BY t.first_seen DESC, t.score DESC LIMIT 10`;
+      WHERE t.category = 'software' AND t.status IS DISTINCT FROM 'not_relevant' ORDER BY s.section = 'gov', t.first_seen DESC, t.score DESC LIMIT 10`; // banks first
     if (!rows.length) return 'No software tenders yet.';
-    await sendTenders(rows, '<b>Newest software tenders</b>', {}, reply);
+    await sendTenders(rows, '<b>Newest software tenders</b> (banks first)', {}, reply);
   },
 
   async search(q, reply) {

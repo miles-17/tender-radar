@@ -13,7 +13,7 @@ await call('setWebhook', {
 });
 await call('setMyCommands', {
   commands: [
-    ['latest', 'The 10 newest software tenders'],
+    ['latest', 'The 10 newest software tenders, banks first'],
     ['search', 'Find tenders by meaning: /search core banking'],
     ['bank', "An institution's recent tenders: /bank City"],
     ['watch', 'Post matching tenders right away: /watch payment gateway'],
